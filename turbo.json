@@ -1,0 +1,1 @@
+{\n  "pipeline": {\n    "build": {\n      "dependsOn": ["^build"],\n      "outputs": ["dist/**"]\n    },\n    "dev": {\n      "cache": false,\n      "persistent": true\n    }\n  }\n}
