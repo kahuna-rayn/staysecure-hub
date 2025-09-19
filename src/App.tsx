@@ -6,6 +6,7 @@ import { supabase } from "./config/supabase";
 import Dashboard from "./pages/Dashboard";
 import LoginPage from "./pages/LoginPage";
 import ResetPassword from "./pages/ResetPassword";
+import ActivateAccount from "./pages/ActivateAccount";
 import NotFound from "./pages/NotFound";
 import "./App.css";
 
@@ -24,6 +25,12 @@ const RecoveryRedirect = () => {
       // Redirect to reset password page with the hash/search params
       navigate('/reset-password' + location.search + location.hash, { replace: true });
     }
+    
+    // Check if this is an account activation link
+    if (hash.includes('type=invite') || searchParams.get('type') === 'invite') {
+      // Redirect to activation page with the hash/search params
+      navigate('/activate-account' + location.search + location.hash, { replace: true });
+    }
   }, [location.pathname, location.hash, location.search, navigate]);
   
   return null;
@@ -38,6 +45,7 @@ const App = () => (
           <Route path="/" element={<Dashboard />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/activate-account" element={<ActivateAccount />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

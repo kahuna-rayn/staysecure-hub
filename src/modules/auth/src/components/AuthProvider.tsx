@@ -13,6 +13,7 @@ interface AuthContextValue {
   signUp: (email: string, password: string, fullName?: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  activateUser: (password: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -136,6 +137,25 @@ export const AuthProvider: React.FC<{
     }
   };
 
+  const activateUser = async (password: string) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const { error } = await supabaseClient.auth.updateUser({
+        password: password
+      });
+
+      if (error) {
+        throw error;
+      }
+    } catch (error: any) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const value: AuthContextValue = {
     user,
     loading,
@@ -144,6 +164,7 @@ export const AuthProvider: React.FC<{
     signUp,
     signOut,
     resetPassword,
+    activateUser,
   };
 
   return (

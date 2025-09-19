@@ -33,6 +33,7 @@ export interface UserProfile {
   language: string;
   created_at: string;
   updated_at: string;
+  activated_at?: string;
 }
 
 export const useUserProfiles = () => {

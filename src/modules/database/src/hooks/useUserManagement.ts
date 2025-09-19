@@ -30,6 +30,7 @@ interface UserProfile {
   two_factor_enabled?: boolean;
   created_at?: string;
   updated_at?: string;
+  activated_at?: string;
 }
 
 interface NewUser {

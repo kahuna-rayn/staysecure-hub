@@ -103,6 +103,28 @@ export const createUseAuth = (dependencies: {
       }
     }, [supabaseClient]);
 
+    const activateUser = useCallback(async (password: string) => {
+      try {
+        setAuthState(prev => ({ ...prev, loading: true, error: null }));
+        
+        const { error } = await supabaseClient.auth.updateUser({
+          password: password
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        setAuthState(prev => ({ ...prev, loading: false }));
+      } catch (error: any) {
+        setAuthState(prev => ({ 
+          ...prev, 
+          loading: false, 
+          error: error.message 
+        }));
+      }
+    }, [supabaseClient]);
+
     useEffect(() => {
       // Get initial session
       const getInitialSession = async () => {
@@ -149,6 +171,7 @@ export const createUseAuth = (dependencies: {
       signUp,
       signOut,
       resetPassword,
+      activateUser,
     };
   };
 };

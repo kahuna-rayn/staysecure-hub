@@ -2,6 +2,7 @@ import React from "react";
 import { useAuth } from "../modules/auth/src/components/AuthProvider";
 import LoginForm from "../modules/auth/src/components/LoginForm";
 import Dashboard from "./Dashboard";
+import { SimpleActivationTest } from "../components/SimpleActivationTest";
 
 const LoginPage: React.FC = () => {
   const { user } = useAuth();
@@ -21,6 +22,9 @@ const LoginPage: React.FC = () => {
         <div className="login-form-container">
           <LoginForm onSwitchToSignUp={() => {}} />
         </div>
+        
+        {/* Temporary test component - remove this after testing */}
+        <SimpleActivationTest />
       </div>
     </div>
   );
