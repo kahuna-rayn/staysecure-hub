@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { useEffect } from "react";
-import { AuthProvider } from "./modules/auth/src/components/AuthProvider";
+import { AuthProvider } from "@staysecure/auth";
 import { supabase } from "./config/supabase";
 import Dashboard from "./pages/Dashboard";
 import LoginPage from "./pages/LoginPage";

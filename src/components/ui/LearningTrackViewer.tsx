@@ -10,7 +10,7 @@ import { ToastAction } from '@/components/ui/toast';
 import { LessonViewer } from '@/components/lesson/LessonViewer';
 import { loadLessonForPreview } from '@/lib/lessonPreview';
 import { useLessonDataReadOnly } from '@/hooks/useLessonDataReadOnly';
-import { useAuth } from '@/components/auth/AuthProvider';
+import { useAuth } from '@staysecure/auth';
 import { useProfile } from '@/hooks/useProfile';
 import { calculateLessonAvailability, calculateTrackProgress, formatAvailableDate } from '@/lib/scheduling';
 import { useLessonsWithTranslations } from '@/hooks/useLessonsWithTranslations';

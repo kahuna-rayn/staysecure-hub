@@ -10,7 +10,7 @@ import { ArrowLeft, Plus, Save, Eye, Edit } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/components/auth/AuthProvider';
+import { useAuth } from '@staysecure/auth';
 import { DecisionTreeBuilder } from './DecisionTreeBuilder';
 import { LessonViewer } from '@/components/lesson/LessonViewer';
 import { Lesson as LessonType } from '@/types/lesson';

@@ -1,8 +1,8 @@
 import React from "react";
-import { useAuth } from "../modules/auth/src/components/AuthProvider";
+import { useAuth } from "@staysecure/auth";
 import LoginForm from "../modules/auth/src/components/LoginForm";
 import Dashboard from "./Dashboard";
-import { SimpleActivationTest } from "../components/SimpleActivationTest";
+import { ActivationTest } from "../components/ActivationTest";
 
 const LoginPage: React.FC = () => {
   const { user } = useAuth();
@@ -20,11 +20,11 @@ const LoginPage: React.FC = () => {
           <p>Modular Architecture Testing App</p>
         </div>
         <div className="login-form-container">
-          <LoginForm onSwitchToSignUp={() => {}} />
+          <LoginForm />
         </div>
         
-        {/* Temporary test component - remove this after testing */}
-        <SimpleActivationTest />
+        {/* Temporary test component - remove after testing */}
+        <ActivationTest />
       </div>
     </div>
   );

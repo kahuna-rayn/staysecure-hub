@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAuth } from './AuthProvider';
+import { useAuth } from '@staysecure/auth';
 import { Button } from '../../../../components/ui/button';
 import { Input } from '../../../../components/ui/input';
 import { Label } from '../../../../components/ui/label';
@@ -7,17 +7,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Alert, AlertDescription } from '../../../../components/ui/alert';
 import { Loader2, Eye, EyeOff } from 'lucide-react';
 
-interface LoginFormProps {}
-
-const LoginForm: React.FC<LoginFormProps> = () => {
+const LoginForm: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [showActivateAccount, setShowActivateAccount] = useState(false);
   const [success, setSuccess] = useState('');
   
-  const { signIn, resetPassword, error, loading: authLoading } = useAuth();
+  const { signIn, resetPassword, sendActivationEmail, error, loading: authLoading } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,19 +48,40 @@ const LoginForm: React.FC<LoginFormProps> = () => {
     }
   };
 
+  const handleActivateAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setSuccess('');
+
+    try {
+      await sendActivationEmail(email);
+      setSuccess('Account activation link has been sent to your email.');
+      setShowActivateAccount(false);
+    } catch (error: any) {
+      console.log('Activation email error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Card className="w-full max-w-md mx-auto">
       <CardHeader>
-        <CardTitle>{showForgotPassword ? 'Reset Password' : 'Sign In'}</CardTitle>
+        <CardTitle>
+          {showForgotPassword ? 'Reset Password' : 
+           showActivateAccount ? 'Activate Account' : 'Sign In'}
+        </CardTitle>
         <CardDescription>
           {showForgotPassword 
             ? 'Enter your email address to receive password reset instructions'
+            : showActivateAccount
+            ? 'Enter your organization email address to receive account activation instructions'
             : 'Enter your email and password to access your learning dashboard'
           }
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={showForgotPassword ? handleForgotPassword : handleSubmit} className="space-y-4">
+        <form onSubmit={showForgotPassword ? handleForgotPassword : showActivateAccount ? handleActivateAccount : handleSubmit} className="space-y-4">
           {error && (
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>
@@ -85,7 +105,7 @@ const LoginForm: React.FC<LoginFormProps> = () => {
             />
           </div>
           
-          {!showForgotPassword && (
+          {!showForgotPassword && !showActivateAccount && (
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
               <div className="relative">
@@ -116,20 +136,59 @@ const LoginForm: React.FC<LoginFormProps> = () => {
           
           <Button type="submit" className="w-full" disabled={loading || authLoading}>
             {(loading || authLoading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {showForgotPassword ? 'Send Reset Instructions' : 'Sign In'}
+            {showForgotPassword ? 'Send Reset Instructions' : 
+             showActivateAccount ? 'Send Activation Link' : 'Sign In'}
           </Button>
           
           <div className="text-center">
-            <Button 
-              variant="link" 
-              type="button"
-              onClick={() => {
-                setShowForgotPassword(!showForgotPassword);
-                setSuccess('');
-              }}
-            >
-              {showForgotPassword ? 'Back to Sign In' : 'Forgot Password?'}
-            </Button>
+            {showForgotPassword ? (
+              <Button 
+                variant="link" 
+                type="button"
+                onClick={() => {
+                  setShowForgotPassword(false);
+                  setSuccess('');
+                }}
+              >
+                Back to Sign In
+              </Button>
+            ) : showActivateAccount ? (
+              <Button 
+                variant="link" 
+                type="button"
+                onClick={() => {
+                  setShowActivateAccount(false);
+                  setSuccess('');
+                }}
+              >
+                Back to Sign In
+              </Button>
+            ) : (
+              <div className="flex justify-center space-x-4">
+                <Button 
+                  variant="link" 
+                  type="button"
+                  onClick={() => {
+                    setShowForgotPassword(true);
+                    setShowActivateAccount(false);
+                    setSuccess('');
+                  }}
+                >
+                  Forgot Password?
+                </Button>
+                <Button 
+                  variant="link" 
+                  type="button"
+                  onClick={() => {
+                    setShowActivateAccount(true);
+                    setShowForgotPassword(false);
+                    setSuccess('');
+                  }}
+                >
+                  Activate Account
+                </Button>
+              </div>
+            )}
           </div>
         </form>
       </CardContent>

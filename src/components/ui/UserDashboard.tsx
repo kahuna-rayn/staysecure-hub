@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Play, BookOpen, Calendar, Clock, CheckCircle, Grid, List, ChevronUp, ChevronDown, Trophy, Target, Award, AlertTriangle, TrendingUp, Users, Star, Download, ExternalLink, MapPin } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/components/auth/AuthProvider';
+import { useAuth } from '@staysecure/auth';
 import { LearningTrackViewer } from './LearningTrackViewer';
 
 interface LearningTrack {

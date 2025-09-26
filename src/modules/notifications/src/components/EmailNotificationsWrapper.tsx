@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { EmailNotifications } from '../../shared-components/notifications';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/components/auth/AuthProvider';
+import { useAuth } from '@staysecure/auth';
 
 // Import UI components from LEARN app
 import { Button } from '@/components/ui/button';

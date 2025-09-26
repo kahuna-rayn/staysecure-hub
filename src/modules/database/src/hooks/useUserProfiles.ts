@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/components/auth/AuthProvider';
+import { useAuth } from '@staysecure/auth';
 import type { User } from '@supabase/supabase-js';
 
 export interface UserProfile {

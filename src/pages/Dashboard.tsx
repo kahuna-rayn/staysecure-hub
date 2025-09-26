@@ -1,5 +1,5 @@
 import React from "react";
-import { useAuth } from "../modules/auth/src/components/AuthProvider";
+import { useAuth } from "@staysecure/auth";
 import { createUseUserRole } from "../modules/database/src/hooks/useUserRole";
 import { supabase } from "../config/supabase";
 import LoginPage from "./LoginPage";

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '@/config/supabase';
-import { useAuth } from '../modules/auth/src/components/AuthProvider';
+import { useAuth } from "@staysecure/auth";
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -26,14 +26,23 @@ const ActivateAccount: React.FC = () => {
 
   useEffect(() => {
     const run = async () => {
-      // Parse tokens from hash fragment if present: #access_token=...&refresh_token=...&type=invite
+      // Parse tokens from hash fragment if present: #access_token=...&refresh_token=...&type=signup
       const hash = location.hash || window.location.hash;
       const params = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
       const type = params.get('type');
       const access = params.get('access_token');
       const refresh = params.get('refresh_token');
 
-      if (type === 'invite' && access && refresh) {
+      // Handle recovery flow (from resetPasswordForEmail)
+      // For recovery, we don't need to set session immediately - user will set password first
+      if (type === 'recovery') {
+        console.log('Recovery flow detected, user will set password');
+        // Don't set session yet - let user set password first
+        return;
+      }
+
+      // Handle signup/invite flows (if needed)
+      if ((type === 'signup' || type === 'invite') && access && refresh) {
         setAccessToken(access);
         setRefreshToken(refresh);
         try {

@@ -11,7 +11,7 @@ import { FileText, Calendar, AlertCircle, CheckCircle, Clock, ExternalLink, Sear
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
-import { useAuth } from '@/components/auth/AuthProvider';
+import { useAuth } from '@staysecure/auth';
 
 interface DocumentAssignment {
   assignment_id: string;

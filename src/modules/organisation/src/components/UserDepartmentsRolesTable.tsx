@@ -9,7 +9,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Plus, X, Star, Users, Check } from 'lucide-react';
 import { toast } from 'sonner';
-import { useAuth } from '@/components/auth/AuthProvider';
+import { useAuth } from '@staysecure/auth';
 
 interface UserDepartmentsRolesTableProps {
   userId: string;
