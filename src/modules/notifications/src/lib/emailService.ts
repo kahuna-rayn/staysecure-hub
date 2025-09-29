@@ -35,41 +35,75 @@ export class EmailService {
     }
   }
 
-  async sendEmail(emailData: EmailData): Promise<{ success: boolean; messageId?: string; error?: string }> {
-    if (!this.lambdaUrl) {
-      return {
-        success: false,
-        error: 'Lambda URL not configured. Please call EmailService.configure() first.',
-      };
-    }
-
+  async sendEmail(emailData: EmailData, supabaseClient?: any): Promise<{ success: boolean; messageId?: string; error?: string }> {
+    // NEW METHOD: Use Supabase Edge Function instead of direct Lambda call
     try {
-      const response = await fetch(this.lambdaUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          to: emailData.to,
-          subject: emailData.subject,
-          htmlBody: emailData.htmlBody,
-          textBody: emailData.textBody,
-          fromEmail: emailData.from || this.defaultFrom,
-        }),
-      });
+      // Use provided supabase client or fallback to direct fetch
+      if (supabaseClient) {
+        const { data, error } = await supabaseClient.functions.invoke('send-email', {
+          body: {
+            to: emailData.to,
+            subject: emailData.subject,
+            html: emailData.htmlBody, // Note: Edge Function expects 'html', not 'htmlBody'
+          }
+        });
 
-      const result = await response.json();
+        if (error) {
+          return {
+            success: false,
+            error: error.message || 'Failed to send email',
+          };
+        }
 
-      if (response.ok && result.success) {
-        return {
-          success: true,
-          messageId: result.messageId,
-        };
+        if (data && data.success) {
+          return {
+            success: true,
+            messageId: data.messageId,
+          };
+        } else {
+          return {
+            success: false,
+            error: data?.error || 'Failed to send email',
+          };
+        }
       } else {
-        return {
-          success: false,
-          error: result.error || 'Failed to send email',
-        };
+        // Fallback to direct fetch if no supabase client provided
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ufvingocbzegpgjknzhm.supabase.co';
+        const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+        
+        if (!supabaseKey) {
+          return {
+            success: false,
+            error: 'Supabase client not provided and VITE_SUPABASE_ANON_KEY not configured',
+          };
+        }
+
+        const response = await fetch(`${supabaseUrl}/functions/v1/send-email`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseKey}`,
+          },
+          body: JSON.stringify({
+            to: emailData.to,
+            subject: emailData.subject,
+            html: emailData.htmlBody,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+          return {
+            success: true,
+            messageId: result.messageId,
+          };
+        } else {
+          return {
+            success: false,
+            error: result.error || 'Failed to send email',
+          };
+        }
       }
     } catch (error: any) {
       console.error('Error sending email:', error);
@@ -81,7 +115,7 @@ export class EmailService {
   }
 
   // Template for lesson reminder emails
-  async sendLessonReminder(to: string, lessonTitle: string, scheduledTime: string): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  async sendLessonReminder(to: string, lessonTitle: string, scheduledTime: string, supabaseClient?: any): Promise<{ success: boolean; messageId?: string; error?: string }> {
     const subject = `Reminder: ${lessonTitle} starts soon`;
     const htmlBody = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -102,11 +136,11 @@ export class EmailService {
       to,
       subject,
       htmlBody,
-    });
+    }, supabaseClient);
   }
 
   // Template for task due date reminders
-  async sendTaskDueReminder(to: string, taskName: string, dueDate: string): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  async sendTaskDueReminder(to: string, taskName: string, dueDate: string, supabaseClient?: any): Promise<{ success: boolean; messageId?: string; error?: string }> {
     const subject = `Reminder: ${taskName} is due soon`;
     const htmlBody = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -127,11 +161,11 @@ export class EmailService {
       to,
       subject,
       htmlBody,
-    });
+    }, supabaseClient);
   }
 
   // Template for achievement emails
-  async sendAchievementEmail(to: string, achievementTitle: string, achievementDescription: string): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  async sendAchievementEmail(to: string, achievementTitle: string, achievementDescription: string, supabaseClient?: any): Promise<{ success: boolean; messageId?: string; error?: string }> {
     const subject = `Congratulations! You've earned: ${achievementTitle}`;
     const htmlBody = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -152,11 +186,11 @@ export class EmailService {
       to,
       subject,
       htmlBody,
-    });
+    }, supabaseClient);
   }
 
   // Template for course completion emails
-  async sendCourseCompletionEmail(to: string, courseName: string): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  async sendCourseCompletionEmail(to: string, courseName: string, supabaseClient?: any): Promise<{ success: boolean; messageId?: string; error?: string }> {
     const subject = `Congratulations! You've completed ${courseName}`;
     const htmlBody = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -177,11 +211,11 @@ export class EmailService {
       to,
       subject,
       htmlBody,
-    });
+    }, supabaseClient);
   }
 
   // Template for system alert emails
-  async sendSystemAlert(to: string, alertTitle: string, alertMessage: string): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  async sendSystemAlert(to: string, alertTitle: string, alertMessage: string, supabaseClient?: any): Promise<{ success: boolean; messageId?: string; error?: string }> {
     const subject = `System Alert: ${alertTitle}`;
     const htmlBody = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -202,7 +236,7 @@ export class EmailService {
       to,
       subject,
       htmlBody,
-    });
+    }, supabaseClient);
   }
 }
 

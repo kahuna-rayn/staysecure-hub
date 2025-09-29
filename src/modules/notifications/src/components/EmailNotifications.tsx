@@ -232,27 +232,31 @@ export const EmailNotifications: React.FC<EmailNotificationsProps> = ({
           emailResult = await emailService.sendLessonReminder(
             user.email,
             'Introduction to Cybersecurity',
-            '2:00 PM today'
+            '2:00 PM today',
+            supabase
           );
           break;
         case 'task_due':
           emailResult = await emailService.sendTaskDueReminder(
             user.email,
             'Security Assessment Quiz',
-            'Tomorrow at 11:59 PM'
+            'Tomorrow at 11:59 PM',
+            supabase
           );
           break;
         case 'achievement':
           emailResult = await emailService.sendAchievementEmail(
             user.email,
             'First Lesson Completed',
-            'You completed your first cybersecurity lesson!'
+            'You completed your first cybersecurity lesson!',
+            supabase
           );
           break;
         case 'course_completion':
           emailResult = await emailService.sendCourseCompletionEmail(
             user.email,
-            'Cybersecurity Fundamentals'
+            'Cybersecurity Fundamentals',
+            supabase
           );
           break;
         case 'system_alert':
@@ -260,7 +264,8 @@ export const EmailNotifications: React.FC<EmailNotificationsProps> = ({
           emailResult = await emailService.sendSystemAlert(
             user.email,
             'System Maintenance',
-            'Scheduled maintenance will occur tonight at 2 AM EST.'
+            'Scheduled maintenance will occur tonight at 2 AM EST.',
+            supabase
           );
           break;
       }

@@ -1,0 +1,15 @@
+{
+  "name": "auth-email-lambda",
+  "version": "1.0.0",
+  "description": "Lambda function for sending authentication emails via AWS SES",
+  "main": "index.js",
+  "scripts": {
+    "deploy": "zip -r auth-email-lambda.zip . && aws lambda update-function-code --function-name auth-email-sender --zip-file fileb://auth-email-lambda.zip"
+  },
+  "dependencies": {
+    "@aws-sdk/client-ses": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
