@@ -4,23 +4,29 @@ A comprehensive, reusable notification system for React applications with suppor
 
 ## 📚 Complete Documentation
 
-**Current Release** (Lesson Reminders):
-- [Quick Start Guide](../../LESSON_REMINDERS_QUICKSTART.md)
-- [Full Setup Guide](../../LESSON_REMINDERS_SETUP.md)
-- [Security Model](../../LESSON_REMINDERS_SECURITY.md)
+All documentation is now organized in the [`docs/`](./docs/) folder:
 
-**Next Release** (Template-Based System):
-- 📖 [System Overview](../../NOTIFICATION_SYSTEM_OVERVIEW.md) - **Start Here**
-- 📋 [Learning Progress Notifications](../../LEARNING_PROGRESS_NOTIFICATIONS.md)
-- 🗄️ [Database Schema](../../NOTIFICATION_DATABASE_SCHEMA.md)
-- 🔨 [Implementation Guide](../../NOTIFICATION_IMPLEMENTATION_GUIDE.md)
-- 📧 [Template Examples](../../NOTIFICATION_TEMPLATE_EXAMPLES.md)
-- 👨‍💼 [Admin Guide](../../NOTIFICATION_ADMIN_GUIDE.md)
+**Start Here**:
+- 📖 [System Overview](./docs/NOTIFICATION_SYSTEM_OVERVIEW.md) - **Start Here**
+- 📋 [Documentation Index](./docs/NOTIFICATION_DOCUMENTATION_INDEX.md) - Complete guide index
 
-**Future** (Gamification):
-- 🚀 [Gamification Roadmap](../../GAMIFICATION_ROADMAP.md)
+**Lesson Reminders** (Current Release):
+- [Quick Start Guide](./docs/LESSON_REMINDERS_QUICKSTART.md)
+- [Full Setup Guide](./docs/LESSON_REMINDERS_SETUP.md)
+- [Security Model](./docs/LESSON_REMINDERS_SECURITY.md)
+- [Implementation Summary](./docs/LESSON_REMINDERS_SUMMARY.md)
 
-**Index**: [Complete Documentation Index](../../NOTIFICATION_DOCUMENTATION_INDEX.md)
+**Template-Based System** (Next Release):
+- 📋 [Learning Progress Notifications](./docs/LEARNING_PROGRESS_NOTIFICATIONS.md)
+- 🗄️ [Database Schema](./docs/NOTIFICATION_DATABASE_SCHEMA.md)
+- 🔨 [Implementation Guide](./docs/NOTIFICATION_IMPLEMENTATION_GUIDE.md)
+- 📧 [Template Examples](./docs/NOTIFICATION_TEMPLATE_EXAMPLES.md)
+- 👨‍💼 [Admin Guide](./docs/NOTIFICATION_ADMIN_GUIDE.md)
+
+**Reference**:
+- [Notification Types Reference](./docs/NOTIFICATION_TYPES_REFERENCE.md)
+- [Database Schema Details](./docs/NOTIFICATION_DATABASE_SCHEMA.md)
+- [Files Manifest](./docs/NOTIFICATION_FILES_MANIFEST.md)
 
 ## Features
 
