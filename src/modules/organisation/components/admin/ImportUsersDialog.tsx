@@ -9,7 +9,11 @@ import { useUserProfiles } from '@/hooks/useUserProfiles';
 import { supabase } from '@/integrations/supabase/client';
 import Papa from 'papaparse';
 
-const ImportUsersDialog: React.FC = () => {
+interface ImportUsersDialogProps {
+  onImportComplete?: () => Promise<void>;
+}
+
+const ImportUsersDialog: React.FC<ImportUsersDialogProps> = ({ onImportComplete }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -198,6 +202,11 @@ const ImportUsersDialog: React.FC = () => {
           setUploadedFile(null);
           setIsProcessing(false);
           setIsOpen(false);
+          
+          // Refresh the user list after successful import
+          if (onImportComplete) {
+            await onImportComplete();
+          }
         },
         error: (error) => {
           console.error('Parse error:', error);

@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/hooks/useAuth';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Alert, AlertDescription } from '../components/ui/alert';
+import { useAuth } from '../components/AuthProvider';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Eye, EyeOff } from 'lucide-react';
 import raynLogo from '@/assets/rayn-logo.png';
 
-const ActivateAccount: React.FC = () => {
+interface ActivateAccountProps {
+  supabaseClient: any;
+}
+
+const ActivateAccount: React.FC<ActivateAccountProps> = ({ supabaseClient }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { activateUser, error: authError, loading: authLoading, signOut } = useAuth();
@@ -54,19 +57,11 @@ const ActivateAccount: React.FC = () => {
         hasTokenHash: !!tokenHash
       });
 
-      // Handle recovery flow (from resetPasswordForEmail)
-      // For recovery, we don't need to set session immediately - user will set password first
-      if (type === 'recovery') {
-        console.log('ActivateAccount: Recovery flow detected, user will set password');
-        // Don't set session yet - let user set password first
-        return;
-      }
-
       // Handle invite flow with token (Supabase inviteUserByEmail)
       if (tokenHash && type === 'invite') {
         console.log('ActivateAccount: Processing invite token');
         try {
-          const { data, error } = await supabase.auth.verifyOtp({
+          const { data, error } = await supabaseClient.auth.verifyOtp({
             token_hash: tokenHash,
             type: 'invite',
           });
@@ -96,36 +91,14 @@ if (emailParam && userIdParam) {
   // User can now set their password without token verification
   return;
 }
-// Handle recovery flow with token (Supabase resetPasswordForEmail)
-if (tokenHash && type === 'recovery') {
-  console.log('ActivateAccount: Processing recovery token');
-  try {
-    const { data, error } = await supabase.auth.verifyOtp({
-      token_hash: tokenHash,
-      type: 'recovery',
-    });
-    
-    if (error) {
-      console.error('ActivateAccount: verifyOtp error:', error);
-      setError('Invalid or expired activation link. Please contact your administrator.');
-    } else if (data.user) {
-      console.log('ActivateAccount: Recovery verified successfully for:', data.user.email);
-      setEmail(data.user.email || '');
-      // User is now authenticated and can set password
-    }
-  } catch (e) {
-    console.error('ActivateAccount: verifyOtp exception:', e);
-    setError('Failed to verify activation link. Please try again.');
-  }
-  return;
-}
+
       // Handle signup/invite flows with hash tokens (legacy)
       if ((type === 'signup' || type === 'invite') && access && refresh) {
         console.log('ActivateAccount: Setting session for', type, 'flow');
         setAccessToken(access);
         setRefreshToken(refresh);
         try {
-          const { data, error } = await supabase.auth.setSession({
+          const { data, error } = await supabaseClient.auth.setSession({
             access_token: access,
             refresh_token: refresh,
           });
@@ -145,7 +118,7 @@ if (tokenHash && type === 'recovery') {
 
       // Fallback: if a session already exists (Supabase may have handled invite), allow activation without tokens
       console.log('ActivateAccount: Checking for existing session');
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await supabaseClient.auth.getSession();
       if (session) {
         console.log('ActivateAccount: Found existing session for:', session.user?.email);
         // Set the email from the session user
@@ -192,41 +165,8 @@ if (password.length < 12 || !hasLowercase || !hasUppercase || !hasDigit || !hasS
       const userIdParam = searchParams.get('user_id');
       
       if (userIdParam) {
-        // Simple activation flow - update password using Edge Function
-        const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-user-password`;
-        const authHeader = `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`;
-        
-        
-        console.log('Environment variables:', {
-          VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
-          VITE_SUPABASE_ANON_KEY: import.meta.env.VITE_SUPABASE_ANON_KEY ? 'SET' : 'UNDEFINED'
-        });
-        console.log('Making request to:', url);
-        console.log('Request body:', { userId: userIdParam, password: password });
-        
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': authHeader
-          },
-          body: JSON.stringify({
-            userId: userIdParam,
-            password: password
-          })
-        });
-        
-        console.log('Response status:', response.status);
-        
-        const result = await response.json();
-        
-        console.log('Edge Function response:', response.status, result);
-        
-        if (!response.ok) {
-          console.error('Edge Function error:', result);
-          throw new Error(result.error || 'Failed to update password');
-        }
-        
+        // Simple activation flow - use activateUser with userId
+        await activateUser(email, password, confirmPassword, userIdParam);
         setSuccess('Account activated successfully! Redirecting to login...');
         
         // Redirect to login after 2 seconds

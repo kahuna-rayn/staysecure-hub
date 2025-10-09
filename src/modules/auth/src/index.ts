@@ -1,11 +1,6 @@
-// Export types
-export type { User, AuthState, AuthContextValue, AuthConfig } from "./types";
-
-// Export hooks
-export { createUseAuth } from "./hooks/useAuth";
-
-// Export components
-export { AuthProvider, useAuth } from "./components/AuthProvider";
-
-// Export default hook factory for convenience
-export { createUseAuth as default } from "./hooks/useAuth";
+// Export auth module components and hooks
+export { AuthProvider, useAuth } from './components/AuthProvider';
+export { AuthModuleWrapper } from './components/AuthModuleWrapper';
+export { default as ActivateAccount } from './components/ActivateAccount';
+export { default as ResetPassword } from './components/ResetPassword';
+export { default as AuthPage } from './components/AuthPage';

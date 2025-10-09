@@ -18,7 +18,7 @@ import ImportUsersDialog from './ImportUsersDialog';
 
 const UserManagement: React.FC = () => {
   const { hasPermission, onUserAction } = useOrganisationContext();
-  const { profiles, loading, updateProfile } = useUserProfiles();
+  const { profiles, loading, updateProfile, refetch } = useUserProfiles();
   const [viewMode, setViewMode] = useViewPreference('userManagement', 'cards');
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<{ id: string; name: string } | null>(null);
@@ -55,8 +55,9 @@ const UserManagement: React.FC = () => {
     
     await handleCreateUser(newUser, async (id, updates) => {
       await updateProfile(id, updates);
-    }, () => {
-      // User creation completed - no additional navigation needed as we're already on the right page
+    }, async () => {
+      // Refresh the user list after successful creation
+      await refetch();
     });
   };
 
@@ -68,7 +69,11 @@ const UserManagement: React.FC = () => {
 
   const handleDeleteConfirm = async (reason: string) => {
     if (!userToDelete) return;
-    await handleDeleteUser(userToDelete.id, userToDelete.name, reason);
+    const success = await handleDeleteUser(userToDelete.id, userToDelete.name, reason);
+    if (success) {
+      // Refresh the user list after successful deletion
+      await refetch();
+    }
     setUserToDelete(null);
   };
 
@@ -98,7 +103,7 @@ const UserManagement: React.FC = () => {
               <List className="h-4 w-4" />
             </ToggleGroupItem>
           </ToggleGroup>
-          <ImportUsersDialog />
+          <ImportUsersDialog onImportComplete={refetch} />
           <CreateUserDialog
             isOpen={isCreateDialogOpen}
             onOpenChange={setIsCreateDialogOpen}

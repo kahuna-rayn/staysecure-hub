@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Bell, Settings, Send, CheckCircle, AlertCircle } from 'lucide-react';
+import { Mail, Send } from 'lucide-react';
 import { emailService, EmailService } from '../lib/emailService';
 
 // These should be passed as props or configured externally
@@ -15,11 +15,6 @@ interface EmailNotificationsProps {
   };
   // UI components - should be passed from the consuming app
   Button: any;
-  Card: any;
-  CardContent: any;
-  CardDescription: any;
-  CardHeader: any;
-  CardTitle: any;
   Input: any;
   Label: any;
   Switch: any;
@@ -28,20 +23,8 @@ interface EmailNotificationsProps {
   SelectItem: any;
   SelectTrigger: any;
   SelectValue: any;
-  Textarea: any;
 }
 
-interface EmailNotification {
-  id: string;
-  userId: string;
-  type: 'lesson_reminder' | 'task_due' | 'system_alert' | 'achievement' | 'course_completion';
-  title: string;
-  message: string;
-  email: string;
-  status: 'pending' | 'sent' | 'failed';
-  scheduledFor?: Date;
-  createdAt: Date;
-}
 
 interface EmailPreferences {
   userId: string;
@@ -61,11 +44,6 @@ export const EmailNotifications: React.FC<EmailNotificationsProps> = ({
   user,
   awsConfig,
   Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
   Input,
   Label,
   Switch,
@@ -74,10 +52,8 @@ export const EmailNotifications: React.FC<EmailNotificationsProps> = ({
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Textarea,
 }) => {
   const [preferences, setPreferences] = useState<EmailPreferences | null>(null);
-  const [notifications, setNotifications] = useState<EmailNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [testEmailType, setTestEmailType] = useState<string>('system_alert');
@@ -93,7 +69,6 @@ export const EmailNotifications: React.FC<EmailNotificationsProps> = ({
   useEffect(() => {
     if (user) {
       loadPreferences();
-      loadNotifications();
     }
   }, [user]);
 
@@ -187,29 +162,6 @@ export const EmailNotifications: React.FC<EmailNotificationsProps> = ({
     }
   };
 
-  const loadNotifications = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('email_notifications')
-        .select('*')
-        .eq('user_id', user?.id)
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      if (error) {
-        console.error('Error loading notifications:', error);
-        return;
-      }
-
-      setNotifications(data?.map(n => ({
-        ...n,
-        createdAt: new Date(n.created_at),
-        scheduledFor: n.scheduled_for ? new Date(n.scheduled_for) : undefined,
-      })) || []);
-    } catch (error) {
-      console.error('Error loading notifications:', error);
-    }
-  };
 
   const sendTestEmail = async () => {
     console.log('Send test email clicked. User:', user);
@@ -287,7 +239,6 @@ export const EmailNotifications: React.FC<EmailNotificationsProps> = ({
           console.error('Error saving notification:', error);
         }
 
-        await loadNotifications();
         alert('Test email sent successfully!');
       } else {
         alert(`Failed to send email: ${emailResult.error}`);
@@ -312,24 +263,14 @@ export const EmailNotifications: React.FC<EmailNotificationsProps> = ({
     <div className="space-y-6">
       <div className="flex items-center gap-2">
         <Mail className="h-6 w-6 text-learning-primary" />
-        <h2 className="text-2xl font-bold">Email Notifications</h2>
+        <h2 className="text-2xl font-bold text-learning-primary">Email Preferences</h2>
       </div>
 
       {/* Email Preferences */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Settings className="h-5 w-5" />
-            Email Preferences
-          </CardTitle>
-          <CardDescription>
-            Configure your email notification settings
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
+      <div className="space-y-6">
           {/* Global Email Toggle */}
           <div className="flex items-center justify-between">
-            <div>
+            <div className="text-left">
               <Label htmlFor="email-enabled">Enable Email Notifications</Label>
               <p className="text-sm text-muted-foreground">
                 Receive notifications via email
@@ -349,7 +290,7 @@ export const EmailNotifications: React.FC<EmailNotificationsProps> = ({
               
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <Label>Lesson Reminders</Label>
+                  <Label className="text-left">Lesson Reminders</Label>
                   <Switch
                     checked={preferences?.lessonReminders || false}
                     onCheckedChange={(checked) => updatePreferences({ lessonReminders: checked })}
@@ -357,7 +298,7 @@ export const EmailNotifications: React.FC<EmailNotificationsProps> = ({
                 </div>
                 
                 <div className="flex items-center justify-between">
-                  <Label>Task Due Dates</Label>
+                  <Label className="text-left">Task Due Dates</Label>
                   <Switch
                     checked={preferences?.taskDueDates || false}
                     onCheckedChange={(checked) => updatePreferences({ taskDueDates: checked })}
@@ -365,7 +306,7 @@ export const EmailNotifications: React.FC<EmailNotificationsProps> = ({
                 </div>
                 
                 <div className="flex items-center justify-between">
-                  <Label>System Alerts</Label>
+                  <Label className="text-left">System Alerts</Label>
                   <Switch
                     checked={preferences?.systemAlerts || false}
                     onCheckedChange={(checked) => updatePreferences({ systemAlerts: checked })}
@@ -373,7 +314,7 @@ export const EmailNotifications: React.FC<EmailNotificationsProps> = ({
                 </div>
                 
                 <div className="flex items-center justify-between">
-                  <Label>Achievements</Label>
+                  <Label className="text-left">Achievements</Label>
                   <Switch
                     checked={preferences?.achievements || false}
                     onCheckedChange={(checked) => updatePreferences({ achievements: checked })}
@@ -381,7 +322,7 @@ export const EmailNotifications: React.FC<EmailNotificationsProps> = ({
                 </div>
                 
                 <div className="flex items-center justify-between">
-                  <Label>Course Completions</Label>
+                  <Label className="text-left">Course Completions</Label>
                   <Switch
                     checked={preferences?.courseCompletions || false}
                     onCheckedChange={(checked) => updatePreferences({ courseCompletions: checked })}
@@ -394,7 +335,7 @@ export const EmailNotifications: React.FC<EmailNotificationsProps> = ({
           {/* Quiet Hours */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <div>
+              <div className="text-left">
                 <Label>Quiet Hours</Label>
                 <p className="text-sm text-muted-foreground">
                   Don't send emails during these hours
@@ -461,57 +402,8 @@ export const EmailNotifications: React.FC<EmailNotificationsProps> = ({
               </Button>
             </div>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Recent Notifications */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Bell className="h-5 w-5" />
-            Recent Email Notifications
-          </CardTitle>
-          <CardDescription>
-            Your recent email notification history
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {notifications.length === 0 ? (
-            <p className="text-muted-foreground text-center py-4">
-              No email notifications yet
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {notifications.map((notification) => (
-                <div
-                  key={notification.id}
-                  className="flex items-center justify-between p-3 border rounded-lg"
-                >
-                  <div className="flex-1">
-                    <h4 className="font-medium">{notification.title}</h4>
-                    <p className="text-sm text-muted-foreground">{notification.message}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {notification.createdAt.toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {notification.status === 'sent' && (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                    )}
-                    {notification.status === 'failed' && (
-                      <AlertCircle className="h-4 w-4 text-red-500" />
-                    )}
-                    {notification.status === 'pending' && (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </div>
   );
 };
 

@@ -141,6 +141,12 @@ const Dashboard: React.FC = () => {
             >
               Notifications
             </button>
+            <button 
+              onClick={() => navigate('/email-settings')}
+              className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors"
+            >
+              Email Settings
+            </button>
             <button className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
               Settings
             </button>

@@ -8,6 +8,7 @@ import LoginPage from "./pages/LoginPage";
 import ResetPassword from "./pages/ResetPassword";
 import ActivateAccount from "./pages/ActivateAccount";
 import Notifications from "./pages/Notifications";
+import EmailSettings from "./pages/EmailSettings";
 import NotFound from "./pages/NotFound";
 import "./App.css";
 
@@ -48,6 +49,7 @@ const App = () => (
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/activate-account" element={<ActivateAccount />} />
           <Route path="/email-notifications" element={<Notifications />} />
+          <Route path="/email-settings" element={<EmailSettings />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

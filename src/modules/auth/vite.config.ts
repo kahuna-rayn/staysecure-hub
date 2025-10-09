@@ -16,7 +16,14 @@ export default defineConfig({
         "react",
         "react-dom",
         "react/jsx-runtime",
-        "@supabase/supabase-js"
+        "react-router-dom",
+        "@supabase/supabase-js",
+        "lucide-react",
+        /^@\/components\//,
+        /^@\/assets\//,
+        /^@\/integrations\//,
+        /^@\/lib\//,
+        /^@\/hooks\//
       ],
       output: {
         globals: {
@@ -29,10 +36,5 @@ export default defineConfig({
     },
     sourcemap: true,
     minify: false
-  },
-  resolve: {
-    alias: {
-      "@": resolve(__dirname, "src")
-    }
   }
 });

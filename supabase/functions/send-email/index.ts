@@ -83,7 +83,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ error: 'Auth Lambda service not configured' }),
         { 
-          status: 500, 
+          status: 86, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       );
@@ -98,32 +98,56 @@ serve(async (req) => {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>${subject}</title>
         <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f8fafc; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #02757F; margin: 0; padding: 0; background-color: #f0f9f8; }
             .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
-            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center; }
-            .header h1 { color: white; margin: 0; font-size: 28px; font-weight: 600; }
-            .content { padding: 40px 30px; }
-            .content h2 { color: #1f2937; margin: 0 0 20px 0; font-size: 24px; }
-            .content p { color: #6b7280; margin: 0 0 20px 0; font-size: 16px; }
-            .button { display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; padding: 16px 32px; border-radius: 8px; font-weight: 600; font-size: 16px; margin: 20px 0; }
-            .button:hover { opacity: 0.9; }
-            .footer { background: #f8fafc; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb; }
-            .footer p { color: #9ca3af; font-size: 14px; margin: 0; }
-            .logo { width: 40px; height: 40px; background: white; border-radius: 8px; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; font-weight: bold; color: #667eea; }
+            .header { background: linear-gradient(135deg, #359D8A 0%, #026473 100%); padding: 20px 30px; text-align: center; }
+            .header h1 { color: white; margin: 0; font-size: 24px; font-weight: 600; }
+            .content { padding: 20px 30px; }
+            .content h2 { color: #02757F; margin: 0 0 15px 0; font-size: 22px; }
+            .content p { color: #868686; margin: 0 0 15px 0; font-size: 16px; }
+            .button { 
+                display: inline-block; 
+                background: linear-gradient(135deg, #359D8A 0%, #026473 100%); 
+                color: white !important; 
+                text-decoration: none !important; 
+                padding: 18px 36px; 
+                border-radius: 8px; 
+                font-weight: 600; 
+                font-size: 16px; 
+                margin: 15px 0; 
+                box-shadow: 0 4px 12px rgba(53, 157, 138, 0.3);
+                border: none;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                text-align: center;
+                min-width: 200px;
+                line-height: 1.2;
+                vertical-align: middle;
+            }
+            .button:hover { 
+                opacity: 0.9; 
+                box-shadow: 0 6px 16px rgba(53, 157, 138, 0.4);
+                transform: translateY(-1px);
+            }
+            .footer { background: #f0f9f8; padding: 20px; text-align: center; border-top: 1px solid #67C171; }
+            .footer p { color: #868686; font-size: 14px; margin: 0; }
+            .logo { width: 60px; height: 60px; margin: 0 auto 10px; display: block; }
         </style>
     </head>
     <body>
         <div class="container">
             <div class="header">
-                <div class="logo">SL</div>
-                <h1>StaySecure Learn</h1>
+                <img src="https://44485296.fs1.hubspotusercontent-na2.net/hubfs/44485296/RAYN%20logos/RAYN%20Logo%203D%20Transparent.png" alt="RAYN Secure Logo" class="logo" />
+                <h1>RAYN Secure</h1>
             </div>
             <div class="content">
                 ${html}
             </div>
             <div class="footer">
-                <p>© 2024 StaySecure Learn. All rights reserved.</p>
-                <p>This email was sent from StaySecure Learn platform.</p>
+                <p>You're receiving this email because you're enrolled in a learning track.</p>
+                <p><a href="${Deno.env.get('SITE_URL') || 'https://app.raynsecure.com'}/settings/notifications" style="color: #02757F; text-decoration: underline;">Manage notification preferences</a></p>
+                <p>© ${new Date().getFullYear()} RAYN Secure Pte Ltd. All rights reserved.</p>
+                <p>This email was sent from RAYN Secure Pte Ltd.</p>
             </div>
         </div>
     </body>
@@ -169,10 +193,11 @@ serve(async (req) => {
       }
     );
 
-  } catch (error) {
-    console.error('Send email error:', error);
+  } catch (err) {
+    console.error('Send email error:', err);
+    const details = err instanceof Error ? err.message : String(err);
     return new Response(
-      JSON.stringify({ error: 'Internal server error', details: error.message }),
+      JSON.stringify({ error: 'Internal server error', details }),
       { 
         status: 500, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 

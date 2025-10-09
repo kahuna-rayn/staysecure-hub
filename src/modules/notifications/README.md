@@ -2,6 +2,26 @@
 
 A comprehensive, reusable notification system for React applications with support for lessons, tasks, reminders, and other notification types.
 
+## 📚 Complete Documentation
+
+**Current Release** (Lesson Reminders):
+- [Quick Start Guide](../../LESSON_REMINDERS_QUICKSTART.md)
+- [Full Setup Guide](../../LESSON_REMINDERS_SETUP.md)
+- [Security Model](../../LESSON_REMINDERS_SECURITY.md)
+
+**Next Release** (Template-Based System):
+- 📖 [System Overview](../../NOTIFICATION_SYSTEM_OVERVIEW.md) - **Start Here**
+- 📋 [Learning Progress Notifications](../../LEARNING_PROGRESS_NOTIFICATIONS.md)
+- 🗄️ [Database Schema](../../NOTIFICATION_DATABASE_SCHEMA.md)
+- 🔨 [Implementation Guide](../../NOTIFICATION_IMPLEMENTATION_GUIDE.md)
+- 📧 [Template Examples](../../NOTIFICATION_TEMPLATE_EXAMPLES.md)
+- 👨‍💼 [Admin Guide](../../NOTIFICATION_ADMIN_GUIDE.md)
+
+**Future** (Gamification):
+- 🚀 [Gamification Roadmap](../../GAMIFICATION_ROADMAP.md)
+
+**Index**: [Complete Documentation Index](../../NOTIFICATION_DOCUMENTATION_INDEX.md)
+
 ## Features
 
 - **Multiple Notification Types**: Lessons, tasks, system alerts, achievements, and more

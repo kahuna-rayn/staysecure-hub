@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@yourorg/notification-system/utils/supabase';
+import { supabase } from '../utils/supabase';
 import type { 
   NotificationPreferences, 
   UseNotificationSettingsReturn,

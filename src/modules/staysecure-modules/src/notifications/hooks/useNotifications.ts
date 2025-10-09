@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '../utils/supabase';
 import type { 
   Notification, 
   NotificationFilters, 
@@ -8,11 +9,7 @@ import type {
   UpdateNotificationRequest 
 } from '../types';
 
-export const createUseNotifications = (dependencies: {
-  supabaseClient: any; // SupabaseClient type
-}) => {
-  return (filters: NotificationFilters = {}): UseNotificationsReturn => {
-    const { supabaseClient } = dependencies;
+export const useNotifications = (filters: NotificationFilters = {}): UseNotificationsReturn => {
   const queryClient = useQueryClient();
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -193,4 +190,76 @@ export const createUseNotifications = (dependencies: {
     deleteNotification,
     refresh,
   };
+};
+
+// Hook for creating notifications
+export const useCreateNotification = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (notification: CreateNotificationRequest): Promise<Notification> => {
+      const { data, error } = await supabase
+        .from('notifications')
+        .insert({
+          user_id: notification.userId,
+          type: notification.type,
+          title: notification.title,
+          message: notification.message,
+          priority: notification.priority || 'normal',
+          scheduled_for: notification.scheduledFor?.toISOString(),
+          action_url: notification.actionUrl,
+          metadata: notification.metadata,
+          status: 'pending',
+        })
+        .select()
+        .single();
+
+      if (error) {
+        throw new Error(`Failed to create notification: ${error.message}`);
+      }
+
+      return {
+        ...data,
+        createdAt: new Date(data.created_at),
+        scheduledFor: data.scheduled_for ? new Date(data.scheduled_for) : undefined,
+        readAt: data.read_at ? new Date(data.read_at) : undefined,
+        expiresAt: data.expires_at ? new Date(data.expires_at) : undefined,
+      };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+    },
+  });
+};
+
+// Hook for updating notifications
+export const useUpdateNotification = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (update: UpdateNotificationRequest): Promise<void> => {
+      const updateData: any = {};
+      
+      if (update.status) {
+        updateData.status = update.status;
+      }
+      if (update.readAt) {
+        updateData.read_at = update.readAt.toISOString();
+      }
+
+      const { error } = await supabase
+        .from('notifications')
+        .update(updateData)
+        .eq('id', update.id);
+
+      if (error) {
+        throw new Error(`Failed to update notification: ${error.message}`);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+    },
+  });
 };

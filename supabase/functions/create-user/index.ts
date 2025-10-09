@@ -148,13 +148,21 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         to: email,
-        subject: 'Activate Your Account',
+        subject: 'Welcome to RAYN Secure - Activate Your Account',
         html: `
-          <h2>Welcome to StaySecure Learn!</h2>
-          <p>Please click the link below to activate your account and set your password:</p>
-          <p><a href="${activationLink}">Activate Account</a></p>
-          <p>If the link doesn't work, copy and paste this URL into your browser:</p>
-          <p>${activationLink}</p>
+          <h2>Welcome to RAYN Secure!</h2>
+          <p>Thank you for joining our cybersecurity training platform.</p>
+          <p>Please click the button below to activate your account and set your password:</p>
+          <p style="text-align: center; margin: 30px 0;">
+            <a href="${activationLink}" class="button" style="display: inline-block; background: linear-gradient(135deg, #359D8A 0%, #026473 100%); color: white !important; text-decoration: none !important; padding: 18px 36px; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 12px rgba(53, 157, 138, 0.3); border: none; cursor: pointer; transition: all 0.2s ease; text-align: center; min-width: 200px; line-height: 1.2;">
+              Activate Your Account
+            </a>
+          </p>
+          <p>If the button doesn't work, copy and paste this URL into your browser:</p>
+          <p style="word-break: break-all; color: #02757F; font-size: 14px;">${activationLink}</p>
+          <p style="margin-top: 30px; color: #868686; font-size: 14px;">
+            <strong>Need help?</strong> Contact our support team at <a href="mailto:support@raynsecure.com" style="color: #02757F; text-decoration: underline;">support@raynsecure.com</a>
+          </p>
         `
       })
     })

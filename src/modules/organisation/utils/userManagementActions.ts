@@ -123,7 +123,7 @@ export const handleCreateUser = async (
   }
 };
 
-export const handleDeleteUser = async (userId: string, userName: string, reason?: string): Promise<void> => {
+export const handleDeleteUser = async (userId: string, userName: string, reason?: string): Promise<boolean> => {
   try {
     // Call the delete-user Edge Function
     const { data, error } = await supabase.functions.invoke('delete-user', {
@@ -140,7 +140,7 @@ export const handleDeleteUser = async (userId: string, userName: string, reason?
         description: "Failed to delete user",
         variant: "destructive",
       });
-      return;
+      return false;
     }
 
     if (!data.success) {
@@ -150,13 +150,14 @@ export const handleDeleteUser = async (userId: string, userName: string, reason?
         description: data.error || "Failed to delete user",
         variant: "destructive",
       });
-      return;
+      return false;
     }
 
     toast({
       title: "Success",
       description: `User ${data.deletedUser.name} has been successfully deleted`,
     });
+    return true;
   } catch (error: any) {
     console.error('Error deleting user:', error);
     toast({
@@ -164,5 +165,6 @@ export const handleDeleteUser = async (userId: string, userName: string, reason?
       description: "Failed to delete user",
       variant: "destructive",
     });
+    return false;
   }
 };
