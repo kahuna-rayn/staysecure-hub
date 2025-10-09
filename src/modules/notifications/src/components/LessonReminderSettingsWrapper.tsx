@@ -1,14 +1,39 @@
 import React from 'react';
 import { LessonReminderSettings } from './LessonReminderSettings';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../../../components/ui/card';
-import { Button } from '../../../../components/ui/button';
-import { Switch } from '../../../../components/ui/switch';
-import { Input } from '../../../../components/ui/input';
-import { Label } from '../../../../components/ui/label';
-import { Alert, AlertDescription } from '../../../../components/ui/alert';
-import { supabase } from '../../../../integrations/supabase/client';
 
-export const LessonReminderSettingsWrapper: React.FC = () => {
+// This wrapper is meant to be used in the consuming app
+// The consuming app should create its own wrapper that imports
+// its UI components and Supabase client
+
+interface LessonReminderSettingsWrapperProps {
+  supabase: any;
+  Card: any;
+  CardHeader: any;
+  CardTitle: any;
+  CardDescription: any;
+  CardContent: any;
+  Button: any;
+  Switch: any;
+  Input: any;
+  Label: any;
+  Alert: any;
+  AlertDescription: any;
+}
+
+export const LessonReminderSettingsWrapper: React.FC<LessonReminderSettingsWrapperProps> = ({
+  supabase,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  Button,
+  Switch,
+  Input,
+  Label,
+  Alert,
+  AlertDescription,
+}) => {
   return (
     <LessonReminderSettings
       supabase={supabase}

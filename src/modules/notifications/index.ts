@@ -6,10 +6,9 @@ export { EmailNotifications } from "./src/components/EmailNotifications";
 
 // Export lesson reminder settings component
 export { LessonReminderSettings } from "./src/components/LessonReminderSettings";
-export { LessonReminderSettingsWrapper } from "./src/components/LessonReminderSettingsWrapper";
 
 // Export a ready-to-use component that works in any consuming app
-export { default as LessonReminderSettingsPage } from "./src/components/LessonReminderSettingsPage";
+export { LessonReminderSettingsPage } from "./src/components/LessonReminderSettingsPage";
 
 // Export types
 export interface EmailNotification {
