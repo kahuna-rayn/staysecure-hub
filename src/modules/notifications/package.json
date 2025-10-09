@@ -25,7 +25,7 @@
     "alerts",
     "components"
   ],
-  "author": "Your Organization",
+  "author": "StaySecure",
   "license": "MIT",
   "peerDependencies": {
     "@supabase/supabase-js": "^2.0.0",
