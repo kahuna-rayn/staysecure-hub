@@ -8,6 +8,9 @@ yarn-error.log*
 dist/
 build/
 
+# Exception: Allow dist/ for modules (needed for git package consumption)
+!src/modules/*/dist/
+
 # Environment variables
 .env
 .env.local
