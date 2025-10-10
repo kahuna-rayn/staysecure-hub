@@ -15,6 +15,11 @@ interface EmailNotificationsProps {
   };
   // UI components - should be passed from the consuming app
   Button: any;
+  Card: any;
+  CardContent: any;
+  CardDescription: any;
+  CardHeader: any;
+  CardTitle: any;
   Input: any;
   Label: any;
   Switch: any;
@@ -23,6 +28,7 @@ interface EmailNotificationsProps {
   SelectItem: any;
   SelectTrigger: any;
   SelectValue: any;
+  Textarea: any;
 }
 
 
@@ -44,6 +50,11 @@ export const EmailNotifications: React.FC<EmailNotificationsProps> = ({
   user,
   awsConfig,
   Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
   Input,
   Label,
   Switch,
@@ -52,6 +63,7 @@ export const EmailNotifications: React.FC<EmailNotificationsProps> = ({
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Textarea,
 }) => {
   const [preferences, setPreferences] = useState<EmailPreferences | null>(null);
   const [loading, setLoading] = useState(true);

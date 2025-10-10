@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { EmailNotifications } from '../modules/notifications/src/components/EmailNotifications';
-import { LessonReminderSettingsWrapper } from '../modules/notifications/src/components/LessonReminderSettingsWrapper';
+import { EmailNotifications } from '@staysecure/notifications';
+import { LessonReminderSettingsWrapper } from '@staysecure/notifications';
 import { supabase } from '../config/supabase';
 import { useAuth } from '@staysecure/auth';
 
@@ -222,7 +222,20 @@ const Notifications: React.FC = () => {
           </TabsContent>
           
           <TabsContent value="reminders" className="space-y-4">
-            <LessonReminderSettingsWrapper />
+            <LessonReminderSettingsWrapper 
+              supabase={supabase}
+              Card={Card}
+              CardHeader={CardHeader}
+              CardTitle={CardTitle}
+              CardDescription={CardDescription}
+              CardContent={CardContent}
+              Button={Button}
+              Switch={Switch}
+              Input={Input}
+              Label={Label}
+              Alert={Alert}
+              AlertDescription={AlertDescription}
+            />
             
             <Card>
               <CardHeader>
