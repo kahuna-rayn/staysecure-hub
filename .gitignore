@@ -9,7 +9,8 @@ dist/
 build/
 
 # Exception: Allow dist/ for modules (needed for git package consumption)
-!src/modules/*/dist/
+!auth/dist/
+!notifications/dist/
 
 # Environment variables
 .env
