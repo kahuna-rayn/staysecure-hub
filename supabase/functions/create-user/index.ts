@@ -133,7 +133,7 @@ serve(async (req) => {
   // Extract base URL from request headers
   const origin = request.headers.get('origin') || 
                  request.headers.get('referer')?.replace(/\/.*$/, '') || 
-                 'http://localhost:8080';
+                 'http://localhost:5173';
   
   // Generate simple activation link
   const activationLink = `${origin}/activate-account?email=${encodeURIComponent(email)}&user_id=${authUser.id}`

@@ -15,7 +15,7 @@ serve(async (req) => {
     // Extract base URL from request headers
     const origin = req.headers.get('origin') || 
                    req.headers.get('referer')?.replace(/\/.*$/, '') || 
-                   'http://localhost:3000';
+                   'http://localhost:5173';
     
     const { to, subject, html } = await req.json();
     
