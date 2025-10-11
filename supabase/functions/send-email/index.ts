@@ -12,6 +12,11 @@ serve(async (req) => {
   }
 
   try {
+    // Extract base URL from request headers
+    const origin = req.headers.get('origin') || 
+                   req.headers.get('referer')?.replace(/\/.*$/, '') || 
+                   'http://localhost:3000';
+    
     const { to, subject, html } = await req.json();
     
     console.log('Send email request:', { to, subject, html: html.substring(0, 100) + '...' });
@@ -145,7 +150,7 @@ serve(async (req) => {
             </div>
             <div class="footer">
                 <p>You're receiving this email because you're enrolled in a learning track.</p>
-                <p><a href="${Deno.env.get('SITE_URL') || 'https://app.raynsecure.com'}/settings/notifications" style="color: #02757F; text-decoration: underline;">Manage notification preferences</a></p>
+                <p><a href="${origin}/settings/notifications" style="color: #02757F; text-decoration: underline;">Manage notification preferences</a></p>
                 <p>© ${new Date().getFullYear()} RAYN Secure Pte Ltd. All rights reserved.</p>
                 <p>This email was sent from RAYN Secure Pte Ltd.</p>
             </div>

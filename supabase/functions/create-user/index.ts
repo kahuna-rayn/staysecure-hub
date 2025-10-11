@@ -130,9 +130,13 @@ serve(async (req) => {
   const authUser = createUserData.user
   console.log(`User created: ${authUser.id}`)
 
+  // Extract base URL from request headers
+  const origin = request.headers.get('origin') || 
+                 request.headers.get('referer')?.replace(/\/.*$/, '') || 
+                 'http://localhost:8080';
+  
   // Generate simple activation link
-  const baseUrl = Deno.env.get('APP_BASE_URL') || 'http://localhost:8080'
-  const activationLink = `${baseUrl}/activate-account?email=${encodeURIComponent(email)}&user_id=${authUser.id}`
+  const activationLink = `${origin}/activate-account?email=${encodeURIComponent(email)}&user_id=${authUser.id}`
   
   console.log('Generated activation link:', activationLink)
   

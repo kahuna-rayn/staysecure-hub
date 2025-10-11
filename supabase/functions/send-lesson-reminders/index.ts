@@ -37,6 +37,10 @@ serve(async (req) => {
   }
 
   try {
+    // Extract base URL from request headers
+    const origin = req.headers.get('origin') || 
+                   req.headers.get('referer')?.replace(/\/.*$/, '') || 
+                   'http://localhost:3000';
     // Create Supabase client with service role key for admin access
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -173,7 +177,8 @@ serve(async (req) => {
                 reminder.lesson_description || '',
                 reminder.learning_track_title,
                 formattedDate,
-                reminder.reminder_type
+                reminder.reminder_type,
+                origin
               ),
             },
           });
@@ -293,7 +298,8 @@ function generateEmailContent(
   lessonDescription: string,
   trackTitle: string,
   availableDate: string,
-  reminderType: string
+  reminderType: string,
+  origin: string
 ): string {
   const isAvailableNow = reminderType === 'available_now';
   const isAvailableSoon = reminderType === 'available_soon';
@@ -330,7 +336,7 @@ function generateEmailContent(
     ` : ''}
     
     <div style="text-align: center; margin: 30px 0;">
-      <a href="${Deno.env.get('SITE_URL') || 'https://app.raynsecure.com'}" 
+      <a href="${origin}" 
          style="display: inline-block; background: #359D8A; color: white !important; text-decoration: none !important; padding: 15px 30px; border-radius: 6px; font-weight: 600; font-size: 16px; margin: 20px 0; text-align: center; min-width: 200px;">
         ${isAvailableNow ? 'Start Lesson →' : 'View Learning Track →'}
       </a>
