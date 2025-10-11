@@ -58,7 +58,16 @@ const OrganisationProfile: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [organisationData, setOrganisationData] = useState<OrganisationData>({});
   const [signatoryData, setSignatoryData] = useState<SignatoryData>({});
+  
+  // Phone validation function
+  const validatePhoneInput = (input: string): string => {
+    return input.replace(/[^0-9+\s\-\(\)]/g, '');
+  };
 
+  const handleTelephoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const validatedValue = validatePhoneInput(e.target.value);
+    setOrganisationData(prev => ({ ...prev, telephone: validatedValue }));
+  };
   useEffect(() => {
     fetchOrganisationData();
   }, []);
@@ -434,7 +443,7 @@ const OrganisationProfile: React.FC = () => {
               <Input
                 id="telephone"
                 value={organisationData.telephone || ''}
-                onChange={(e) => setOrganisationData(prev => ({ ...prev, telephone: e.target.value }))}
+                onChange={handleTelephoneChange} // Use the new handler
                 disabled={!isEditing}
               />
             </div>

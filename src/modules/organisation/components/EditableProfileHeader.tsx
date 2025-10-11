@@ -12,6 +12,7 @@ import { toast } from '@/components/ui/use-toast';
 import ProfileAvatar from '@/modules/organisation/components/profile/ProfileAvatar';
 import ProfileContactInfo from '@/modules/organisation/components/profile/ProfileContactInfo';
 import EditableField from '@/modules/organisation/components/profile/EditableField';
+import { UserRoleField } from '@/modules/organisation/components/profile/UserRoleField';
 
 interface EditableProfileHeaderProps {
   profile: any;
@@ -101,6 +102,62 @@ const EditableProfileHeader: React.FC<EditableProfileHeaderProps> = ({
     setEditingField(null);
   };
 
+  const handleNameChange = async (field: 'firstName' | 'lastName', value: string) => {
+    try {
+      setSaving(true);
+    // Debug: Log the current profile object
+    console.log('Current profile object:', profile);
+    console.log('profile.full_name:', profile.full_name);
+
+      // Update the specific name field
+      const updateData: any = {};
+      if (field === 'firstName') {
+        updateData.first_name = value;
+        console.log('updateData.first_name', updateData.first_name);
+      } else {
+        updateData.last_name = value;
+        console.log('updateData.last_name', updateData.last_name);
+      }
+      
+      // Only auto-generate full_name if it's currently empty
+      if (profile.full_name === '' || profile.full_name?.trim() === '') {
+        console.log('profile.full_name is empty', profile.full_name);
+        const firstName = field === 'firstName' ? value : profile.firstName || '';
+        const lastName = field === 'lastName' ? value : profile.lastName || '';
+        updateData.full_name = `${firstName} ${lastName}`.trim();
+      }
+      
+      await updateProfile(profile.id, updateData);
+      
+      toast({
+        title: "Profile updated",
+        description: "Your profile has been successfully updated.",
+      });
+      
+      setEditingField(null);
+      if (onOptimisticUpdate) {
+        onOptimisticUpdate(field, value);
+        if (updateData.full_name) {
+          onOptimisticUpdate('full_name', updateData.full_name);
+        }
+      }
+      onProfileUpdate();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update profile",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleFullNameChange = async (value: string) => {
+    // Allow manual override of full_name
+    await handleFieldSave('full_name', value);
+  };
+
   // Get manager name and filtered profiles
   const filteredProfiles = profiles.filter(user => user.id !== profile.id);
   const managerProfile = profiles.find(u => u.id === profile.manager);
@@ -147,15 +204,40 @@ const EditableProfileHeader: React.FC<EditableProfileHeaderProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 lg:gap-12 flex-1">
             {/* Column 1 - Personal info */}
             <div className="space-y-2">
-              <div className="text-center sm:text-left">
+              <div className="text-center sm:text-left space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <EditableField
+                    value={profile.firstName || ''}
+                    fieldKey="firstName"
+                    onSave={(field, value) => handleNameChange('firstName', value)}
+                    isEditing={editingField === 'firstName'}
+                    onEdit={handleFieldEdit}
+                    onCancel={handleFieldCancel}
+                    saving={saving}
+                    placeholder="First Name"
+                    inputClassName="text-sm h-8"
+                  />
+                  <EditableField
+                    value={profile.lastName || ''}
+                    fieldKey="lastName"
+                    onSave={(field, value) => handleNameChange('lastName', value)}
+                    isEditing={editingField === 'lastName'}
+                    onEdit={handleFieldEdit}
+                    onCancel={handleFieldCancel}
+                    saving={saving}
+                    placeholder="Last Name"
+                    inputClassName="text-sm h-8"
+                  />
+                </div>
                 <EditableField
-                  value={`${profile.firstName} ${profile.lastName}`}
-                  fieldKey="firstName"
-                  onSave={handleFieldSave}
-                  isEditing={editingField === 'firstName'}
+                  value={profile.full_name || `${profile.firstName} ${profile.lastName}`.trim()}
+                  fieldKey="full_name"
+                  onSave={(field, value) => handleFullNameChange(value)}
+                  isEditing={editingField === 'full_name'}
                   onEdit={handleFieldEdit}
                   onCancel={handleFieldCancel}
                   saving={saving}
+                  placeholder="Full Name (Auto-generated, editable)"
                   className="flex-1"
                   inputClassName="text-2xl font-bold h-10"
                 />
@@ -244,7 +326,7 @@ const EditableProfileHeader: React.FC<EditableProfileHeaderProps> = ({
                   locationId={profile.locationId}
                 />
               </div>
-              
+
               {/* Primary Department and Role */}
               <div className="flex items-center gap-4 w-full">
                 <div className="flex items-center gap-2">
@@ -269,6 +351,7 @@ const EditableProfileHeader: React.FC<EditableProfileHeaderProps> = ({
             <div className="space-y-2">
               <ProfileContactInfo
                 startDate={profile.startDate}
+                userId={profile.id}
                 status={profile.account?.status}
                 accessLevel={profile.account?.accessLevel}
                 lastLogin={profile.account?.lastLogin}

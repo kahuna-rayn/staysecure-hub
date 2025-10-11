@@ -24,6 +24,7 @@ export { default as ProfileAvatar } from './components/profile/ProfileAvatar';
 export { default as ProfileContactInfo } from './components/profile/ProfileContactInfo';
 export { default as EditableField } from './components/profile/EditableField';
 export { default as MultipleRolesField } from './components/profile/MultipleRolesField';
+export { UserRoleField } from './components/profile/UserRoleField';
 
 // Hook exports (re-exported from main hooks directory)
 export { useUserManagement } from '@/hooks/useUserManagement';

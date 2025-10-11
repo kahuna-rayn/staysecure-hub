@@ -8,16 +8,37 @@ import { toast } from '@/hooks/use-toast';
 import { useUserProfiles } from '@/hooks/useUserProfiles';
 import { supabase } from '@/integrations/supabase/client';
 import Papa from 'papaparse';
+import { ImportError } from '@/components/import/ImportErrorReport';
+import { useQuery } from '@tanstack/react-query';
 
 interface ImportUsersDialogProps {
   onImportComplete?: () => Promise<void>;
+  onImportError?: (errors: ImportError[], warnings: ImportError[], stats: { success: number; total: number }) => void;
 }
 
-const ImportUsersDialog: React.FC<ImportUsersDialogProps> = ({ onImportComplete }) => {
+interface LocationWarning extends ImportError {
+  type: 'warning';
+}
+
+const ImportUsersDialog: React.FC<ImportUsersDialogProps> = ({ onImportComplete, onImportError }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const { createProfile } = useUserProfiles();
+
+  // Fetch valid locations for validation
+  const { data: validLocations } = useQuery({
+    queryKey: ['locations'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('locations')
+        .select('id, name')
+        .eq('status', 'Active')
+        .order('name');
+      if (error) throw error;
+      return data || [];
+    },
+  });
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -83,15 +104,131 @@ const ImportUsersDialog: React.FC<ImportUsersDialogProps> = ({ onImportComplete 
     generateSampleCSV();
   };
 
+  // Helper function to validate location
+  const validateLocation = (locationName: string): { isValid: boolean; locationId?: string } => {
+    if (!locationName || !validLocations) {
+      console.log('Location validation: No location name or validLocations not loaded', { locationName, validLocations });
+      return { isValid: false };
+    }
+
+    const trimmedLocation = locationName.trim();
+    console.log('Location validation: Checking location', { 
+      providedLocation: trimmedLocation, 
+      availableLocations: validLocations.map(l => l.name) 
+    });
+    
+    const validLocation = validLocations.find(
+      loc => loc.name.toLowerCase() === trimmedLocation.toLowerCase()
+    );
+
+    console.log('Location validation result:', { 
+      location: trimmedLocation, 
+      found: !!validLocation, 
+      validLocation 
+    });
+
+    return {
+      isValid: !!validLocation,
+      locationId: validLocation?.id
+    };
+  };
+
+  // Helper function to translate technical errors to user-friendly messages
+  const translateError = (error: any): string => {
+    const errorMessage = error?.message || error?.error || 'Unknown error';
+    
+    console.log('Translating error:', { originalError: error, errorMessage });
+    
+    // Handle specific Supabase/Edge Function errors
+    if (errorMessage.includes('Edge Function returned a non-2xx status code')) {
+      return 'Server error occurred while creating user. Please try again or contact support.';
+    }
+    
+    // Check for "already registered" patterns first (most common case)
+    if (errorMessage.includes('already registered') || errorMessage.includes('User already registered') || 
+        errorMessage.includes('has already been registered')) {
+      return 'A user with this email address already exists.';
+    }
+    
+    if (errorMessage.includes('Failed to create user:')) {
+      if (errorMessage.includes('User already registered') || errorMessage.includes('already registered')) {
+        return 'A user with this email address already exists.';
+      }
+      if (errorMessage.includes('Invalid email')) {
+        return 'The email address format is invalid.';
+      }
+      if (errorMessage.includes('Password should be at least')) {
+        return 'Password does not meet security requirements.';
+      }
+      return 'Failed to create user account. Please check the email address and try again.';
+    }
+    
+    // Handle Supabase Auth specific errors - check the original error object too
+    const fullErrorMessage = JSON.stringify(error);
+    if (fullErrorMessage.includes('already registered') || fullErrorMessage.includes('User already registered') || 
+        fullErrorMessage.includes('has already been registered')) {
+      return 'A user with this email address already exists.';
+    }
+    
+    if (fullErrorMessage.includes('Invalid email') || fullErrorMessage.includes('invalid email') ||
+        errorMessage.includes('Invalid email') || errorMessage.includes('invalid email')) {
+      return 'The email address format is invalid.';
+    }
+    
+    if (errorMessage.includes('Profile creation failed')) {
+      return 'User account was created but profile setup failed. Please contact support.';
+    }
+    
+    if (errorMessage.includes('Database error')) {
+      return 'Database error occurred. Please try again or contact support.';
+    }
+    
+    if (errorMessage.includes('Missing email')) {
+      return 'Email address is required for all users.';
+    }
+    
+    // Handle network/connection errors
+    if (errorMessage.includes('fetch')) {
+      return 'Network error occurred. Please check your connection and try again.';
+    }
+    
+    // Handle timeout errors
+    if (errorMessage.includes('timeout')) {
+      return 'Request timed out. Please try again.';
+    }
+    
+    // Handle FunctionsHttpError specifically
+    if (errorMessage === 'Unknown error' && fullErrorMessage.includes('FunctionsHttpError')) {
+      // This is likely a user already exists error that's not being properly translated
+      // Check if we can extract more info from the error object
+      if (error?.context || error?.hint) {
+        const context = error.context || '';
+        const hint = error.hint || '';
+        if (context.includes('already') || hint.includes('already')) {
+          return 'A user with this email address already exists.';
+        }
+      }
+      return 'Server error occurred while creating user. Please try again or contact support.';
+    }
+    
+    // Default fallback - return a more user-friendly version of the original error
+    return errorMessage.length > 100 
+      ? 'An unexpected error occurred while creating the user. Please try again.'
+      : errorMessage;
+  };
+
   const processUserImport = async (row: any) => {
     const email = row['Email'] || row['email'];
     
     if (!email) {
       console.error('Missing email for row:', row);
-      throw new Error('Missing email');
+      throw new Error('Email address is required for all users.');
     }
 
     console.log('Processing user:', email);
+
+    const locationName = row['Location'] || row['location'] || '';
+    const locationValidation = validateLocation(locationName);
 
     // Use our create-user edge function instead of direct signUp
     const { data: authData, error: authError } = await supabase.functions.invoke('create-user', {
@@ -102,7 +239,8 @@ const ImportUsersDialog: React.FC<ImportUsersDialogProps> = ({ onImportComplete 
         last_name: row['Last Name'] || row['last_name'] || '',
         username: row['Username'] || row['username'] || '',
         phone: row['Phone'] || row['phone'] || '',
-        location: row['Location'] || row['location'] || '',
+        location: locationValidation.isValid ? locationName : '',
+        location_id: locationValidation.locationId || null,
         status: 'Pending',
         bio: row['Bio'] || row['bio'] || '',
         employee_id: row['Employee ID'] || row['employee_id'] || '',
@@ -112,17 +250,26 @@ const ImportUsersDialog: React.FC<ImportUsersDialogProps> = ({ onImportComplete 
 
     if (authError) {
       console.error('Auth error for user:', email, authError);
-      throw authError;
+      const friendlyError = translateError(authError);
+      throw new Error(friendlyError);
     }
 
     if (authData && authData.user) {
       console.log('User created successfully:', email);
     } else if (authData && authData.error) {
       console.error('Create user error:', authData.error);
-      throw new Error(authData.error);
+      const friendlyError = translateError(authData.error);
+      throw new Error(friendlyError);
     }
 
-    return { email, success: true };
+    return { 
+      email, 
+      success: true, 
+      locationWarning: !locationValidation.isValid && locationName ? {
+        location: locationName,
+        message: `Location "${locationName}" not found in system - user created without location assignment`
+      } : null
+    };
   };
 
   const handleImport = async () => {
@@ -157,8 +304,8 @@ const ImportUsersDialog: React.FC<ImportUsersDialogProps> = ({ onImportComplete 
 
           console.log('Processing', data.length, 'rows');
           let successCount = 0;
-          let errorCount = 0;
-          const errors: string[] = [];
+          const errors: ImportError[] = [];
+          const locationWarnings: ImportError[] = [];
 
           // Process users sequentially to avoid overwhelming the system
           for (let i = 0; i < data.length; i++) {
@@ -170,16 +317,38 @@ const ImportUsersDialog: React.FC<ImportUsersDialogProps> = ({ onImportComplete 
               continue;
             }
 
+            const email = row['Email'] || row['email'] || 'Unknown';
+            
             try {
-              console.log(`Processing user ${i + 1} of ${data.length}:`, row['Email'] || row['email']);
-              await processUserImport(row);
+              console.log(`Processing user ${i + 1} of ${data.length}:`, email);
+              const result = await processUserImport(row);
               successCount++;
               console.log(`Successfully processed user ${i + 1}`);
+              
+              // Collect location warnings
+              if (result.locationWarning) {
+                console.log('Adding location warning:', result.locationWarning);
+                locationWarnings.push({
+                  rowNumber: i + 2, // +2 because row 1 is headers, and i is 0-indexed
+                  identifier: email,
+                  field: 'Location',
+                  error: result.locationWarning.message,
+                  rawData: row
+                });
+              } else {
+                const locationName = row['Location'] || row['location'] || '';
+                console.log('No location warning for user:', email, 'location:', locationName);
+              }
             } catch (error: any) {
               console.error(`Error importing user ${i + 1}:`, error);
-              errorCount++;
-              const email = row['Email'] || row['email'] || 'Unknown';
-              errors.push(`${email}: ${error.message}`);
+              const friendlyError = translateError(error);
+              errors.push({
+                rowNumber: i + 2, // +2 because row 1 is headers, and i is 0-indexed
+                identifier: email,
+                field: !row['Email'] && !row['email'] ? 'Email' : undefined,
+                error: friendlyError,
+                rawData: row
+              });
             }
 
             // Add a small delay between users to prevent rate limiting
@@ -188,20 +357,43 @@ const ImportUsersDialog: React.FC<ImportUsersDialogProps> = ({ onImportComplete 
             }
           }
 
-          console.log('Import completed. Success:', successCount, 'Errors:', errorCount);
-
-          toast({
-            title: "Import completed",
-            description: `Successfully imported ${successCount} users. ${errorCount} errors occurred. Users will need to activate their accounts via email. Roles and departments can be assigned after import.`,
-          });
-
-          if (errors.length > 0) {
-            console.log('Import errors:', errors);
-          }
+          console.log('Import completed. Success:', successCount, 'Errors:', errors.length, 'Location Warnings:', locationWarnings.length);
 
           setUploadedFile(null);
           setIsProcessing(false);
           setIsOpen(false);
+
+          // Show combined error and warning report through parent component
+          if ((errors.length > 0 || locationWarnings.length > 0) && onImportError) {
+            setTimeout(() => {
+              onImportError(errors, locationWarnings, { success: successCount, total: data.length });
+            }, 300);
+            
+            if (errors.length > 0 && locationWarnings.length > 0) {
+              toast({
+                title: "Import completed with errors and warnings",
+                description: `${successCount} users imported successfully. ${errors.length} failed, ${locationWarnings.length} have location warnings.`,
+                variant: "destructive",
+              });
+            } else if (errors.length > 0) {
+              toast({
+                title: "Import completed with errors",
+                description: `${successCount} users imported successfully. ${errors.length} failed. Opening error report...`,
+                variant: "destructive",
+              });
+            } else if (locationWarnings.length > 0) {
+              toast({
+                title: "Import completed with location warnings",
+                description: `${successCount} users imported successfully. ${locationWarnings.length} users have invalid locations. Opening warning report...`,
+                variant: "default",
+              });
+            }
+          } else {
+            toast({
+              title: "Import completed successfully",
+              description: `All ${successCount} users imported successfully. Users will need to activate their accounts via email.`,
+            });
+          }
           
           // Refresh the user list after successful import
           if (onImportComplete) {

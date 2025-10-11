@@ -76,7 +76,6 @@ export const handleCreateUser = async (
         location: newUser.location,
         location_id: newUser.location_id,
         status: newUser.status,
-        access_level: newUser.access_level,
         bio: newUser.bio,
         employee_id: newUser.employee_id,
       });
@@ -123,7 +122,7 @@ export const handleCreateUser = async (
   }
 };
 
-export const handleDeleteUser = async (userId: string, userName: string, reason?: string): Promise<boolean> => {
+export const handleDeleteUser = async (userId: string, userName: string, reason?: string): Promise<{ success: boolean; deletedUser?: any; error?: string }> => {
   try {
     // Call the delete-user Edge Function
     const { data, error } = await supabase.functions.invoke('delete-user', {
@@ -140,7 +139,7 @@ export const handleDeleteUser = async (userId: string, userName: string, reason?
         description: "Failed to delete user",
         variant: "destructive",
       });
-      return false;
+      return { success: false, error: "Failed to delete user" };
     }
 
     if (!data.success) {
@@ -150,14 +149,10 @@ export const handleDeleteUser = async (userId: string, userName: string, reason?
         description: data.error || "Failed to delete user",
         variant: "destructive",
       });
-      return false;
+      return { success: false, error: data.error || "Failed to delete user" };
     }
 
-    toast({
-      title: "Success",
-      description: `User ${data.deletedUser.name} has been successfully deleted`,
-    });
-    return true;
+    return { success: true, deletedUser: data.deletedUser };
   } catch (error: any) {
     console.error('Error deleting user:', error);
     toast({
@@ -165,6 +160,6 @@ export const handleDeleteUser = async (userId: string, userName: string, reason?
       description: "Failed to delete user",
       variant: "destructive",
     });
-    return false;
+    return { success: false, error: "Failed to delete user" };
   }
 };

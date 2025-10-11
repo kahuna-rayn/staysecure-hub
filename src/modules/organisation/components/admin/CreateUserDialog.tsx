@@ -1,4 +1,5 @@
 import React from 'react';
+import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +10,7 @@ import { Plus } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useOrganisationContext } from '../../context/OrganisationContext';
 import type { NewUser } from '../../types';
+import EditableField from '@/modules/organisation/components/profile/EditableField';
 
 interface CreateUserDialogProps {
   isOpen: boolean;
@@ -16,16 +18,40 @@ interface CreateUserDialogProps {
   newUser: NewUser;
   onUserChange: (user: NewUser) => void;
   onSubmit: (e: React.FormEvent) => void;
+  loading?: boolean;
 }
+
 
 const CreateUserDialog: React.FC<CreateUserDialogProps> = ({
   isOpen,
   onOpenChange,
   newUser,
   onUserChange,
-  onSubmit
+  onSubmit,
+  loading = false
 }) => {
-  const { supabaseClient } = useOrganisationContext();
+const [editingField, setEditingField] = useState<string | null>(null);
+const [saving, setSaving] = useState(false);
+const { supabaseClient } = useOrganisationContext();
+const [isFullNameManuallyEdited, setIsFullNameManuallyEdited] = useState(false);
+
+  // Form validation
+  const isFormValid = () => {
+    const requiredFields = [
+      newUser.first_name?.trim(),
+      newUser.last_name?.trim(),
+      newUser.email?.trim(),
+      newUser.location_id
+    ];
+    
+    // Check if all required fields have values
+    const allFieldsFilled = requiredFields.every(field => field && field.length > 0);
+    
+    // Check email format
+    const emailValid = newUser.email?.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.email.trim());
+    
+    return allFieldsFilled && emailValid;
+  };
 
   // Fetch locations for dropdown
   const { data: locations } = useQuery({
@@ -40,15 +66,19 @@ const CreateUserDialog: React.FC<CreateUserDialogProps> = ({
     },
   });
 
-  const updateField = (field: keyof NewUser, value: string) => {
-    const updatedUser = { ...newUser, [field]: value };
-    
-    // Auto-populate username with email when email changes
-    if (field === 'email') {
-      updatedUser.username = value;
+  // Phone validation function
+  const validatePhoneInput = (input: string): string => {
+    return input.replace(/[^0-9+\s\-\(\)]/g, '');
+  };
+
+  const updateField = (field: string, value: string) => {
+    // Apply phone validation for phone field
+    if (field === 'phone') {
+      const validatedValue = validatePhoneInput(value);
+      onUserChange({ ...newUser, [field]: validatedValue });
+    } else {
+      onUserChange({ ...newUser, [field]: value });
     }
-    
-    onUserChange(updatedUser);
   };
 
   const handleLocationChange = (locationId: string) => {
@@ -63,23 +93,61 @@ const CreateUserDialog: React.FC<CreateUserDialogProps> = ({
   };
 
   const handleNameChange = (field: 'first_name' | 'last_name', value: string) => {
-    const updatedUser = { ...newUser, [field]: value };
-    
-    // Auto-update full_name when first_name or last_name changes
-    const firstName = field === 'first_name' ? value : newUser.first_name || '';
-    const lastName = field === 'last_name' ? value : newUser.last_name || '';
+  //console.log('handleNameChange called:', { field, value, currentFullName: newUser.full_name, isManuallyEdited: isFullNameManuallyEdited });
+  const updatedUser = { ...newUser, [field]: value };
+  
+  // Only auto-update full_name if it has NOT been manually edited by the user
+  if (!isFullNameManuallyEdited) {
+    const firstName = field === 'first_name' ? value : updatedUser.first_name || '';
+    const lastName = field === 'last_name' ? value : updatedUser.last_name || '';
     updatedUser.full_name = `${firstName} ${lastName}`.trim();
-    
-    onUserChange(updatedUser);
+    //console.log('Auto-generating full_name:', { firstName, lastName, fullName: updatedUser.full_name });
+  }
+  
+  console.log('Final updatedUser:', updatedUser);
+  onUserChange(updatedUser);
+};
+
+const handleFullNameChange = (value: string) => {
+  // Mark that user has manually edited the full name
+  setIsFullNameManuallyEdited(true);
+  onUserChange({ ...newUser, full_name: value });
+};
+
+  const handleFieldEdit = (field: string) => {
+    setEditingField(field);
+  };
+  const handleFieldCancel = () => {
+    setEditingField(null);
   };
 
-  const handleFullNameChange = (value: string) => {
-    // Allow manual override of full_name
-    onUserChange({ ...newUser, full_name: value });
+  const handleDialogClose = (open: boolean) => {
+    if (!open) {
+      const resetUser: NewUser = {
+        first_name: '',
+        last_name: '',
+        full_name: '',
+        email: '',
+        password: '',
+        username: '',
+        phone: '',
+        employee_id: '',
+        status: 'Active',
+        access_level: 'User',
+        location_id: '',
+        location: '',
+        bio: ''
+      };
+      onUserChange(resetUser);
+      setIsFullNameManuallyEdited(false); 
+      setEditingField(null);
+      setSaving(false);
+    }
+    onOpenChange(open);
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={handleDialogClose}>
       <DialogTrigger asChild>
         <Button>
           <Plus className="h-4 w-4 mr-2" />
@@ -89,13 +157,13 @@ const CreateUserDialog: React.FC<CreateUserDialogProps> = ({
         <DialogHeader>
           <DialogTitle>Create New User</DialogTitle>
           <DialogDescription>
-            Add a new user to your organization
+            Add a new user to your organization. The user will receive an activation email to set their password.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="first_name">First Name</Label>
+              <Label htmlFor="first_name">First Name <span className="text-red-500">*</span></Label>
               <Input
                 id="first_name"
                 value={newUser.first_name}
@@ -105,7 +173,7 @@ const CreateUserDialog: React.FC<CreateUserDialogProps> = ({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="last_name">Last Name</Label>
+              <Label htmlFor="last_name">Last Name <span className="text-red-500">*</span></Label>
               <Input
                 id="last_name"
                 value={newUser.last_name}
@@ -120,48 +188,35 @@ const CreateUserDialog: React.FC<CreateUserDialogProps> = ({
             <Label htmlFor="full_name">Full Name (Auto-generated, editable)</Label>
             <Input
               id="full_name"
-              value={newUser.full_name}
+              value={newUser.full_name || `${newUser.first_name} ${newUser.last_name}`.trim()}
               onChange={(e) => handleFullNameChange(e.target.value)}
-              placeholder="Full name will be auto-generated from first and last name"
+              placeholder="Enter full name"
+              className="flex-1"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="email">Email Address <span className="text-red-500">*</span></Label>
+            <Input
+              id="email"
+              type="email"
+              value={newUser.email}
+              onChange={(e) => updateField('email', e.target.value)}
+              placeholder="Enter email address"
               required
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email Address</Label>
-              <Input
-                id="email"
-                type="email"
-                value={newUser.email}
-                onChange={(e) => updateField('email', e.target.value)}
-                placeholder="Enter email address"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={newUser.password}
-                onChange={(e) => updateField('password', e.target.value)}
-                placeholder="Enter password"
-                required
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="phone">Phone</Label>
+            <Input
+              id="phone"
+              value={newUser.phone}
+              onChange={(e) => updateField('phone', e.target.value)}
+              placeholder="Enter phone number"
+            />
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone</Label>
-              <Input
-                id="phone"
-                value={newUser.phone}
-                onChange={(e) => updateField('phone', e.target.value)}
-                placeholder="Enter phone number"
-              />
-            </div>
             <div className="space-y-2">
               <Label htmlFor="employee_id">Employee ID</Label>
               <Input
@@ -203,7 +258,7 @@ const CreateUserDialog: React.FC<CreateUserDialogProps> = ({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="location">Location</Label>
+            <Label htmlFor="location">Location <span className="text-red-500">*</span></Label>
             <Select value={newUser.location_id || ''} onValueChange={handleLocationChange}>
               <SelectTrigger>
                 <SelectValue placeholder="Select a location" />
@@ -229,11 +284,24 @@ const CreateUserDialog: React.FC<CreateUserDialogProps> = ({
             />
           </div>
 
+          <div className="text-sm text-muted-foreground">
+            <span className="text-red-500">*</span> Required fields
+          </div>
+
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => handleDialogClose(false)} disabled={loading}>
               Cancel
             </Button>
-            <Button type="submit">Create User</Button>
+            <Button type="submit" disabled={loading || !isFormValid()}>
+              {loading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                  Creating...
+                </>
+              ) : (
+                "Create User"
+              )}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

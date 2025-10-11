@@ -34,7 +34,6 @@ const EditableField: React.FC<EditableFieldProps> = ({
   onEdit,
   onSave,
   onCancel,
-  saving,
   type = 'text',
   options,
   asyncOptions,
@@ -47,6 +46,12 @@ const EditableField: React.FC<EditableFieldProps> = ({
     setEditValue(value);
   }, [value, isEditing]);
 
+  // Phone number validation function
+  const validatePhoneInput = (input: string): string => {
+    // Only allow numbers, +, spaces, and common phone separators
+    return input.replace(/[^0-9+\s\-\(\)]/g, '');
+  };
+
   const handleSave = async () => {
     if (fieldKey) {
       await onSave(fieldKey, editValue);
@@ -58,6 +63,19 @@ const EditableField: React.FC<EditableFieldProps> = ({
       handleSave();
     } else if (e.key === 'Escape') {
       onCancel();
+    }
+  };
+
+  // Handle input change with phone validation
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    
+    // Apply phone validation only for phone fields
+    if (fieldKey === 'phone') {
+      const validatedValue = validatePhoneInput(newValue);
+      setEditValue(validatedValue);
+    } else {
+      setEditValue(newValue);
     }
   };
 
@@ -101,7 +119,7 @@ const EditableField: React.FC<EditableFieldProps> = ({
         type={type}
         value={editValue}
         placeholder={placeholder}
-        onChange={(e) => setEditValue(e.target.value)}
+        onChange={handleInputChange} // Use the new handler
         onBlur={handleSave}
         onKeyDown={handleKeyDown}
         className={inputClassName || "h-6 text-sm w-32"}

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from 'staysecure-auth';
 import { useProfile } from "@/hooks/useProfile";
 import { useUserAssets } from "@/hooks/useUserAssets";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -12,7 +12,7 @@ import PersonaDetailsTabs from "./PersonaDetailsTabs";
 // Define PersonProfile interface to replace the one from deleted mockData.ts
 export interface PersonProfile {
   id: string;
-  name: string;
+  full_name: string;
   firstName: string;
   lastName: string;
   email: string;
@@ -75,9 +75,9 @@ const PersonaProfile: React.FC = () => {
   // Memoize personaData to prevent infinite re-renders - MUST be called before any early returns
   const personaData = useMemo(() => ({
     id: profile?.id || '',
-    name: profile?.full_name || '',
-    firstName: profile?.full_name?.split(' ')[0] || '',
-    lastName: profile?.full_name?.split(' ').slice(1).join(' ') || '',
+    full_name: profile?.full_name || '',
+    firstName: profile?.first_name || '',  // Use actual first_name from DB
+    lastName: profile?.last_name || '',    // Use actual last_name from DB
     email: userEmail || '',
     phone: profile?.phone || 'Not provided',
     location: profile?.location || 'Not specified',
@@ -190,10 +190,6 @@ const PersonaProfile: React.FC = () => {
       {!hasAdminAccess && (
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold">My Profile</h1>
-          <Button variant="outline" onClick={handleSignOut}>
-            <LogOut className="h-4 w-4 mr-2" />
-            Sign Out
-          </Button>
         </div>
       )}
       <EditableProfileHeader profile={displayData} onProfileUpdate={refetchProfile} onOptimisticUpdate={handleOptimisticUpdate} />

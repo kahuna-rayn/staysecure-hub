@@ -5,6 +5,7 @@ import EditableField from "./EditableField";
 import { useUserDepartments } from "@/hooks/useUserDepartments";
 import { useUserProfileRoles } from "@/hooks/useUserProfileRoles";
 import { useUserPhysicalLocations } from "@/hooks/useUserPhysicalLocations";
+import { UserRoleField } from "./UserRoleField";
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -45,6 +46,7 @@ const ProfileBasicInfo: React.FC<ProfileBasicInfoProps> = ({
   currentUserId,
   userId
 }) => {
+  console.log('ProfileBasicInfo rendering with userId:', userId, 'currentUserId:', currentUserId);
   const { userDepartments } = useUserDepartments(userId);
   const { primaryRole } = useUserProfileRoles(userId);
   const { data: physicalLocations, isLoading: locationsLoading } = useUserPhysicalLocations(userId);
@@ -184,6 +186,12 @@ const ProfileBasicInfo: React.FC<ProfileBasicInfoProps> = ({
               inputClassName="h-6 text-sm w-48"
               locationId={locationId}
             />
+          </div>
+          
+          {/* System Role */}
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">System Role:</span>
+            <UserRoleField userId={userId} />
           </div>
           
           {/* Primary Department and Role */}

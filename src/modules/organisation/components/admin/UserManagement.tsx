@@ -9,19 +9,28 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { LayoutGrid, List } from 'lucide-react';
 import { useOrganisationContext } from '../../context/OrganisationContext';
 import { DeleteUserDialog } from '@/components/ui/delete-user-dialog';
+import { useToast } from '@/hooks/use-toast';
 import UserList from './UserList';
 import UserTable from './UserTable';
 import CreateUserDialog from './CreateUserDialog';
 import EditUserDialog from './EditUserDialog';
 import ImportUsersDialog from './ImportUsersDialog';
+import { ImportErrorReport, ImportError } from '@/components/import/ImportErrorReport';
 
 
 const UserManagement: React.FC = () => {
   const { hasPermission, onUserAction } = useOrganisationContext();
   const { profiles, loading, updateProfile, refetch } = useUserProfiles();
+  const { toast } = useToast();
   const [viewMode, setViewMode] = useViewPreference('userManagement', 'cards');
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showImportErrorReport, setShowImportErrorReport] = useState(false);
+  const [importErrors, setImportErrors] = useState<ImportError[]>([]);
+  const [importWarnings, setImportWarnings] = useState<ImportError[]>([]);
+  const [importStats, setImportStats] = useState({ success: 0, total: 0 });
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
   
   const {
     editingUser,
@@ -49,16 +58,25 @@ const UserManagement: React.FC = () => {
   const onCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Close dialog and reset form immediately
-    setIsCreateDialogOpen(false);
-    resetNewUser();
+    setIsCreatingUser(true);
     
-    await handleCreateUser(newUser, async (id, updates) => {
-      await updateProfile(id, updates);
-    }, async () => {
-      // Refresh the user list after successful creation
-      await refetch();
-    });
+    try {
+      await handleCreateUser(newUser, async (id, updates) => {
+        await updateProfile(id, updates);
+      }, async () => {
+        // Refresh the user list after successful creation
+        await refetch();
+      });
+      
+      // Close dialog and reset form only after successful creation
+      setIsCreateDialogOpen(false);
+      resetNewUser();
+    } catch (error) {
+      // Keep dialog open on error so user can see the error and retry
+      console.error('Error creating user:', error);
+    } finally {
+      setIsCreatingUser(false);
+    }
   };
 
   const onDeleteUser = (userId: string) => {
@@ -69,12 +87,26 @@ const UserManagement: React.FC = () => {
 
   const handleDeleteConfirm = async (reason: string) => {
     if (!userToDelete) return;
-    const success = await handleDeleteUser(userToDelete.id, userToDelete.name, reason);
-    if (success) {
-      // Refresh the user list after successful deletion
-      await refetch();
+    setIsDeleting(true);
+    try {
+      const result = await handleDeleteUser(userToDelete.id, userToDelete.name, reason);
+      if (result.success) {
+        // Close dialog first
+        setIsDeleteDialogOpen(false);
+        setUserToDelete(null);
+        
+        // Show success toast after dialog is closed
+        toast({
+          title: "Success",
+          description: `User ${result.deletedUser?.name || userToDelete.name} has been successfully deleted`,
+        });
+        
+        // Refresh the user list after successful deletion
+        await refetch();
+      }
+    } finally {
+      setIsDeleting(false);
     }
-    setUserToDelete(null);
   };
 
   const onUpdateProfile = async (id: string, updates: any) => {
@@ -87,32 +119,52 @@ const UserManagement: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">User Management</h2>
-        <div className="flex items-center gap-4">
-          <ToggleGroup 
-            type="single" 
-            value={viewMode} 
-            onValueChange={(value) => value && setViewMode(value as 'cards' | 'list')}
-          >
-            <ToggleGroupItem value="cards" aria-label="Card view">
-              <LayoutGrid className="h-4 w-4" />
-            </ToggleGroupItem>
-            <ToggleGroupItem value="list" aria-label="List view">
-              <List className="h-4 w-4" />
-            </ToggleGroupItem>
-          </ToggleGroup>
-          <ImportUsersDialog onImportComplete={refetch} />
-          <CreateUserDialog
-            isOpen={isCreateDialogOpen}
-            onOpenChange={setIsCreateDialogOpen}
-            newUser={newUser}
-            onUserChange={setNewUser}
-            onSubmit={onCreateUser}
-          />
+    <>
+      <ImportErrorReport
+        errors={importErrors}
+        warnings={importWarnings}
+        successCount={importStats.success}
+        totalCount={importStats.total}
+        isOpen={showImportErrorReport}
+        onClose={() => setShowImportErrorReport(false)}
+        importType="Users"
+      />
+      
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">User Management</h2>
+          <div className="flex items-center gap-4">
+            <ToggleGroup 
+              type="single" 
+              value={viewMode} 
+              onValueChange={(value) => value && setViewMode(value as 'cards' | 'list')}
+            >
+              <ToggleGroupItem value="cards" aria-label="Card view">
+                <LayoutGrid className="h-4 w-4" />
+              </ToggleGroupItem>
+              <ToggleGroupItem value="list" aria-label="List view">
+                <List className="h-4 w-4" />
+              </ToggleGroupItem>
+            </ToggleGroup>
+            <ImportUsersDialog 
+              onImportComplete={refetch}
+              onImportError={(errors, warnings, stats) => {
+                setImportErrors(errors);
+                setImportWarnings(warnings);
+                setImportStats(stats);
+                setShowImportErrorReport(true);
+              }}
+            />
+            <CreateUserDialog
+              isOpen={isCreateDialogOpen}
+              onOpenChange={setIsCreateDialogOpen}
+              newUser={newUser}
+              onUserChange={setNewUser}
+              onSubmit={onCreateUser}
+              loading={isCreatingUser}
+            />
+          </div>
         </div>
-      </div>
 
       {viewMode === 'cards' ? (
         <UserList
@@ -137,13 +189,15 @@ const UserManagement: React.FC = () => {
         onSubmit={onSaveUser}
       />
 
-      <DeleteUserDialog
-        open={isDeleteDialogOpen}
-        onOpenChange={setIsDeleteDialogOpen}
-        userName={userToDelete?.name || ''}
-        onConfirm={handleDeleteConfirm}
-      />
-    </div>
+        <DeleteUserDialog
+          open={isDeleteDialogOpen}
+          onOpenChange={setIsDeleteDialogOpen}
+          userName={userToDelete?.name || ''}
+          onConfirm={handleDeleteConfirm}
+          loading={isDeleting}
+        />
+      </div>
+    </>
   );
 };
 export default UserManagement;
