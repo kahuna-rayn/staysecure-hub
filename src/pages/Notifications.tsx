@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { EmailNotifications } from '@staysecure/notifications';
-import { LessonReminderSettingsWrapper } from '@staysecure/notifications';
+import { EmailNotifications } from 'staysecure-notifications';
+import { LessonReminderSettingsWrapper } from 'staysecure-notifications';
 import { supabase } from '../config/supabase';
-import { useAuth } from '@staysecure/auth';
+import { useAuth } from 'staysecure-auth';
 
 // Import UI components from hub app
 import { Button } from '../components/ui/button';
@@ -233,6 +233,8 @@ const Notifications: React.FC = () => {
               Switch={Switch}
               Input={Input}
               Label={Label}
+              baseUrl="http://localhost:5173"
+              clientPath=""
               Alert={Alert}
               AlertDescription={AlertDescription}
             />

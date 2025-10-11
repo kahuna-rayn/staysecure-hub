@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "@staysecure/auth";
+import { useAuth } from "staysecure-auth";
 import { createUseUserRole } from "../modules/database/src/hooks/useUserRole";
 import { supabase } from "../config/supabase";
 import LoginPage from "./LoginPage";
@@ -134,12 +134,6 @@ const Dashboard: React.FC = () => {
           <div className="flex flex-wrap gap-4">
             <button className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
               Organisation Management
-            </button>
-            <button 
-              onClick={() => navigate('/email-notifications')}
-              className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-            >
-              Notifications
             </button>
             <button 
               onClick={() => navigate('/email-settings')}

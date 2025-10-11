@@ -1,6 +1,6 @@
 import React from "react";
-import { useAuth } from "@staysecure/auth";
-import LoginForm from "../modules/auth/src/components/LoginForm";
+import { useAuth } from "staysecure-auth";
+import { LoginForm } from "staysecure-auth";
 import Dashboard from "./Dashboard";
 import { ActivationTest } from "../components/ActivationTest";
 
