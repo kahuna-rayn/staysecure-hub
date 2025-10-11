@@ -40,6 +40,7 @@
     "sonner": "^2.0.7",
     "staysecure-auth": "git+https://github.com/kahuna-rayn/staysecure-auth.git#main",
     "staysecure-notifications": "github:kahuna-rayn/staysecure-notifications#main",
+    "staysecure-organisation": "file:../organisation",
     "tailwind-merge": "^2.6.0"
   },
   "devDependencies": {
