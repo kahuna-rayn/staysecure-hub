@@ -23,11 +23,6 @@ import RecentEmailNotifications from '../components/admin/RecentEmailNotificatio
 export default function EmailSettings() {
   const [activeTab, setActiveTab] = useState('preferences');
   const { user } = useAuth();
-  
-  console.log('🔍 EmailSettings - user from useAuth:', user);
-  console.log('🔍 EmailSettings - user.id:', user?.id);
-  console.log('🔍 EmailSettings - user.email:', user?.email);
-  console.log('🔧 EmailNotifications component available:', typeof EmailNotifications);
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -63,56 +58,32 @@ export default function EmailSettings() {
         <TabsContent value="preferences" className="space-y-6">
           {user ? (
             <>
-              {(() => {
-                try {
-                  console.log('🚀 About to render EmailNotifications');
-                  console.log('🔧 EmailNotifications component type:', typeof EmailNotifications);
-                  console.log('🔧 User object:', user);
-                  console.log('🔧 Supabase object:', supabase);
-                  
-                  // Test if we can render a simple component first
-                  console.log('🧪 Testing simple component render...');
-                  return (
-                    <div>
-                      <div style={{padding: '20px', border: '1px solid red', margin: '10px'}}>
-                        <h3>TEST: EmailNotifications Component</h3>
-                        <p>User ID: {user?.id}</p>
-                        <p>User Email: {user?.email}</p>
-                        <p>Component Type: {typeof EmailNotifications}</p>
-                      </div>
-                      <EmailNotifications
-                        supabase={supabase}
-                        user={{ 
-                          id: user.id, // Real user ID from auth context
-                          email: user.email // Real user email from auth context
-                        }}
-                        awsConfig={{
-                          lambdaUrl: '', // Not needed for new unified system
-                          fromEmail: 'team@raynsecure.com',
-                        }}
-                        Button={Button}
-                        Card={Card}
-                        CardContent={CardContent}
-                        CardDescription={CardDescription}
-                        CardHeader={CardHeader}
-                        CardTitle={CardTitle}
-                        Input={Input}
-                        Label={Label}
-                        Switch={Switch}
-                        Select={Select}
-                        SelectContent={SelectContent}
-                        SelectItem={SelectItem}
-                        SelectTrigger={SelectTrigger}
-                        SelectValue={SelectValue}
-                        Textarea={Textarea}
-                        />
-                    </div>
-                  );
-                } catch (error) {
-                  console.error('❌ Error rendering EmailNotifications:', error);
-                  return <div>Error loading email notifications: {error.message}</div>;
-                }
-              })()}
+              <EmailNotifications
+                supabase={supabase}
+                user={{ 
+                  id: user.id, // Real user ID from auth context
+                  email: user.email // Real user email from auth context
+                }}
+                awsConfig={{
+                  lambdaUrl: '', // Not needed for new unified system
+                  fromEmail: 'team@raynsecure.com',
+                }}
+                Button={Button}
+                Card={Card}
+                CardContent={CardContent}
+                CardDescription={CardDescription}
+                CardHeader={CardHeader}
+                CardTitle={CardTitle}
+                Input={Input}
+                Label={Label}
+                Switch={Switch}
+                Select={Select}
+                SelectContent={SelectContent}
+                SelectItem={SelectItem}
+                SelectTrigger={SelectTrigger}
+                SelectValue={SelectValue}
+                Textarea={Textarea}
+                />
             </>
           ) : (
             <Card>

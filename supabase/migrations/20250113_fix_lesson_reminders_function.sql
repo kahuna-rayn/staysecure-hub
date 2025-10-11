@@ -1,5 +1,5 @@
 -- Fix the get_users_needing_lesson_reminders function
--- The issue was referencing ut.user_email instead of ut.email
+-- Remove reference to dropped lesson_reminders column from email_preferences
 
 CREATE OR REPLACE FUNCTION public.get_users_needing_lesson_reminders()
 RETURNS TABLE (
@@ -21,7 +21,7 @@ BEGIN
   RETURN QUERY
   WITH user_tracks AS (
     -- Get all users enrolled in learning tracks with their progress
-    -- Only include users who have lesson_reminders enabled in their email preferences
+    -- Only include users who have email enabled globally
     SELECT 
       ultp.user_id,
       ultp.learning_track_id,
@@ -125,4 +125,4 @@ GRANT EXECUTE ON FUNCTION public.get_users_needing_lesson_reminders() TO authent
 GRANT EXECUTE ON FUNCTION public.get_users_needing_lesson_reminders() TO service_role;
 
 -- Add comment
-COMMENT ON FUNCTION public.get_users_needing_lesson_reminders() IS 'Returns list of users who need lesson reminders. Respects email_preferences.lesson_reminders setting';
+COMMENT ON FUNCTION public.get_users_needing_lesson_reminders() IS 'Returns list of users who need lesson reminders. Respects email_enabled setting only (lesson reminders managed separately)';

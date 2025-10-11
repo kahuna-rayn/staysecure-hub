@@ -37,10 +37,18 @@ serve(async (req) => {
   }
 
   try {
-    // Extract base URL from request headers
+    // Extract base URL from request headers or use environment variable
     const origin = req.headers.get('origin') || 
                    req.headers.get('referer')?.replace(/\/.*$/, '') || 
+                   Deno.env.get('APP_BASE_URL') ||
                    'http://localhost:5173';
+    
+    console.log('🔍 Lesson Reminder Function - Origin:', origin);
+    console.log('🔍 Lesson Reminder Function - Headers:', {
+      origin: req.headers.get('origin'),
+      referer: req.headers.get('referer'),
+      appBaseUrl: Deno.env.get('APP_BASE_URL')
+    });
     // Create Supabase client with service role key for admin access
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
