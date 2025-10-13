@@ -315,7 +315,7 @@ export function EditableTable<T extends { id: string }>({
                 {columns.map((column) => (
                   <td 
                     key={column.key} 
-                    className={cn("p-0 align-top border-r border-muted/20 last:border-r-0", column.className)}
+                    className={cn("p-0 align-top text-left border-r border-muted/20 last:border-r-0", column.className)}
                     style={{ width: column.width }}
                   >
                     <EditableCell

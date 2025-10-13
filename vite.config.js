@@ -10,7 +10,9 @@ export default defineConfig({
             '@/lib': resolve(__dirname, 'src/lib'),
             '@/modules': resolve(__dirname, 'src/modules'),
             '@/config': resolve(__dirname, 'src/config'),
-            '@/pages': resolve(__dirname, 'src/pages')
+            '@/pages': resolve(__dirname, 'src/pages'),
+            '@/integrations': resolve(__dirname, 'src/integrations'),
+            '@/assets': resolve(__dirname, 'src/assets')
         }
     },
     css: {
