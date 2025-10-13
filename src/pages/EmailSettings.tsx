@@ -22,9 +22,7 @@ import { EmailNotifications, EmailTemplateManager, RecentEmailNotifications } fr
 export default function EmailSettings() {
   const [activeTab, setActiveTab] = useState('preferences');
   const { user } = useAuth();
-  const { isSuperAdmin, role } = useUserRole();
-  
-  console.log('EmailSettings - role:', role, 'isSuperAdmin:', isSuperAdmin);
+  const { isSuperAdmin } = useUserRole();
 
   return (
     <div className="container mx-auto py-6 space-y-6">
