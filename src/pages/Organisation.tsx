@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from 'staysecure-auth';
-import { OrganisationProvider, OrganisationPanel } from 'staysecure-organisation';
+import { OrganisationProvider, OrganisationPanel } from '../modules/organisation';
 import { supabase } from '../config/supabase';
 
 const OrganisationPage: React.FC = () => {
