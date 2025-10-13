@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Mail, Settings, FileText } from 'lucide-react';
-import { LessonReminderSettingsPage } from 'staysecure-notifications';
+// Old component removed - functionality consolidated into EmailNotifications
 import { Button } from '../components/ui/button';
 import { Switch } from '../components/ui/switch';
 import { Input } from '../components/ui/input';
@@ -36,14 +36,10 @@ export default function EmailSettings() {
       </p>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="preferences" className="flex items-center space-x-2">
             <Settings className="h-4 w-4" />
             <span>Preferences</span>
-          </TabsTrigger>
-          <TabsTrigger value="reminders" className="flex items-center space-x-2">
-            <Mail className="h-4 w-4" />
-            <span>Reminders</span>
           </TabsTrigger>
           <TabsTrigger value="templates" className="flex items-center space-x-2">
             <FileText className="h-4 w-4" />
@@ -94,35 +90,6 @@ export default function EmailSettings() {
           )}
         </TabsContent>
 
-        <TabsContent value="reminders" className="space-y-6">
-          <LessonReminderSettingsPage 
-            supabaseClient={supabase}
-            uiComponents={{
-              Card,
-              CardHeader,
-              CardTitle,
-              CardDescription,
-              CardContent,
-              Button,
-              Switch,
-              Input,
-              Label,
-              Alert,
-              AlertDescription,
-              Badge,
-              Select,
-              SelectContent,
-              SelectItem,
-              SelectTrigger,
-              SelectValue,
-              Separator,
-              Tabs,
-              TabsContent,
-              TabsList,
-              TabsTrigger
-            }}
-          />
-        </TabsContent>
 
         <TabsContent value="templates" className="space-y-6">
           <EmailTemplateManager

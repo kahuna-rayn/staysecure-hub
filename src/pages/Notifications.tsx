@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { EmailNotifications } from 'staysecure-notifications';
-import { LessonReminderSettingsWrapper } from 'staysecure-notifications';
+// Old component removed - functionality consolidated into EmailNotifications
 import { supabase } from '../config/supabase';
 import { useAuth } from 'staysecure-auth';
 
@@ -191,10 +191,9 @@ const Notifications: React.FC = () => {
         
         {/* Tabs for different notification features */}
         <Tabs defaultValue="test" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="test">🧪 Test Email</TabsTrigger>
             <TabsTrigger value="preferences">⚙️ Email Preferences</TabsTrigger>
-            <TabsTrigger value="reminders">📚 Lesson Reminders</TabsTrigger>
             <TabsTrigger value="templates">📝 Template Editor</TabsTrigger>
           </TabsList>
           
@@ -221,44 +220,6 @@ const Notifications: React.FC = () => {
             <EmailNotificationsWrapper />
           </TabsContent>
           
-          <TabsContent value="reminders" className="space-y-4">
-            <LessonReminderSettingsWrapper 
-              supabase={supabase}
-              Card={Card}
-              CardHeader={CardHeader}
-              CardTitle={CardTitle}
-              CardDescription={CardDescription}
-              CardContent={CardContent}
-              Button={Button}
-              Switch={Switch}
-              Input={Input}
-              Label={Label}
-              baseUrl="http://localhost:5173"
-              clientPath=""
-              Alert={Alert}
-              AlertDescription={AlertDescription}
-            />
-            
-            <Card>
-              <CardHeader>
-                <CardTitle>ℹ️ About Lesson Reminders</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground space-y-2">
-                <p>
-                  <strong>Automated System:</strong> Lesson reminders are sent automatically via a cron job 
-                  that runs daily to check for lessons that are now available or overdue.
-                </p>
-                <p>
-                  <strong>Manual Test:</strong> You can manually invoke the send-lesson-reminders function 
-                  from the Supabase dashboard to test it immediately.
-                </p>
-                <p>
-                  <strong>Requirements:</strong> Users must be enrolled in learning tracks with lessons 
-                  that have available_date set.
-                </p>
-              </CardContent>
-            </Card>
-          </TabsContent>
           
           <TabsContent value="templates" className="space-y-4">
             <EmailTemplateEditor

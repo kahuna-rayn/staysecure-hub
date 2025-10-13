@@ -165,7 +165,7 @@ serve(async (req) => {
             message = `Reminder about your lesson "${reminder.lesson_title}"`;
         }
 
-        // Send email notification directly to email_notifications table
+        // Send email notification using database template
         let emailNotificationId: string | null = null;
         try {
           // Format the available date nicely
@@ -176,18 +176,51 @@ serve(async (req) => {
             day: 'numeric',
           });
 
+          // Try to fetch and use database template first
+          const { data: template, error: templateError } = await supabase
+            .from('email_templates')
+            .select('*')
+            .eq('type', 'lesson_reminder')
+            .eq('is_active', true)
+            .order('system', { ascending: false }) // Prefer system templates
+            .limit(1)
+            .single();
+
+          let emailContent: string;
+          let emailSubject: string;
+
+          if (template && !templateError) {
+            // Use database template with variable substitution
+            const variables = {
+              lesson_title: reminder.lesson_title,
+              lesson_description: reminder.lesson_description || '',
+              track_title: reminder.learning_track_title,
+              available_date: formattedDate,
+              reminder_type: reminder.reminder_type,
+              lesson_url: `${origin}/#/lesson/${reminder.lesson_id}`,
+            };
+
+            emailSubject = substituteVariables(template.subject_template, variables);
+            emailContent = substituteVariables(template.html_body_template, variables);
+          } else {
+            // Fallback to hardcoded template if database template not found
+            console.warn('No lesson_reminder template found in database, using fallback template');
+            emailSubject = testMode ? `[TEST] ${title}` : title;
+            emailContent = generateEmailContent(
+              reminder.lesson_title,
+              reminder.lesson_description || '',
+              reminder.learning_track_title,
+              formattedDate,
+              reminder.reminder_type,
+              origin
+            );
+          }
+
           const emailResult = await supabase.functions.invoke('send-email', {
             body: {
               to: testMode ? testEmail : reminder.user_email,
-              subject: testMode ? `[TEST] ${title}` : title,
-              html: generateEmailContent(
-                reminder.lesson_title,
-                reminder.lesson_description || '',
-                reminder.learning_track_title,
-                formattedDate,
-                reminder.reminder_type,
-                origin
-              ),
+              subject: emailSubject,
+              html: emailContent,
             },
           });
 
@@ -298,6 +331,16 @@ serve(async (req) => {
     );
   }
 });
+
+// Template variable substitution helper
+function substituteVariables(template: string, variables: Record<string, any>): string {
+  let result = template;
+  for (const [key, value] of Object.entries(variables)) {
+    const regex = new RegExp(`{{${key}}}`, 'g');
+    result = result.replace(regex, String(value || ''));
+  }
+  return result;
+}
 
 // Generate email content for lesson reminders (no wrapper HTML)
 // The send-email function will add the branded wrapper
