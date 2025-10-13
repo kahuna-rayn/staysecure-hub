@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Trash2, Plus, ChevronUp, ChevronDown } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { EditableCell } from './editable-table/EditableCell';
 import { NewRowForm } from './editable-table/NewRowForm';
 
@@ -41,6 +42,7 @@ interface EditableTableProps<T extends { id: string; uniqueKey?: string }> {
   allowAdd?: boolean;
   allowDelete?: boolean;
   allowView?: boolean;
+  showToastMessages?: boolean;
 }
 
 export function EditableTable<T extends { id: string }>({
@@ -53,13 +55,19 @@ export function EditableTable<T extends { id: string }>({
   className,
   allowAdd = true,
   allowDelete = true,
-  allowView = false
+  allowView = false,
+  showToastMessages = true
 }: EditableTableProps<T>) {
   const [editingCell, setEditingCell] = useState<{ rowId: string; columnKey: string } | null>(null);
   const [editingValue, setEditingValue] = useState<string>('');
   const [isAdding, setIsAdding] = useState(false);
   const [newRowData, setNewRowData] = useState<Partial<T>>({});
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; itemId: string; itemName: string }>({
+    open: false,
+    itemId: '',
+    itemName: ''
+  });
 
   // Sort the data based on current sort configuration
   const sortedData = useMemo(() => {
@@ -209,22 +217,23 @@ export function EditableTable<T extends { id: string }>({
   const handleDelete = async (id: string) => {
     if (!onDelete) return;
     
-    if (confirm('Are you sure you want to delete this item?')) {
-      const result = await onDelete(id);
-      
-      if (result.success) {
-        toast({
-          title: "Deleted successfully",
-          description: "The item has been deleted.",
-        });
-      } else {
-        toast({
-          title: "Delete failed",
-          description: result.error || "Failed to delete the item.",
-          variant: "destructive",
-        });
-      }
-    }
+    // Find the item to get its name/identifier
+    const item = data.find(d => d.id === id);
+    const itemName = (item as any)?.full_name || (item as any)?.name || 'this item';
+    
+    setDeleteDialog({
+      open: true,
+      itemId: id,
+      itemName: itemName
+    });
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!onDelete || !deleteDialog.itemId) return;
+    
+    const result = await onDelete(deleteDialog.itemId);
+    
+    setDeleteDialog({ open: false, itemId: '', itemName: '' });
   };
 
   const handleAddRow = async () => {
@@ -315,7 +324,7 @@ export function EditableTable<T extends { id: string }>({
                 {columns.map((column) => (
                   <td 
                     key={column.key} 
-                    className={cn("p-0 align-top text-left border-r border-muted/20 last:border-r-0", column.className)}
+                    className={cn("p-0 align-top border-r border-muted/20 last:border-r-0", column.className)}
                     style={{ width: column.width }}
                   >
                     <EditableCell
@@ -374,6 +383,17 @@ export function EditableTable<T extends { id: string }>({
           </tbody>
         </table>
       </div>
+
+      <ConfirmationDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) => setDeleteDialog(prev => ({ ...prev, open }))}
+        title="Delete Item"
+        description={`Are you sure you want to delete ${deleteDialog.itemName}? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={handleDeleteConfirm}
+        variant="destructive"
+      />
     </div>
   );
 }

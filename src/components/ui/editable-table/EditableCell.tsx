@@ -245,7 +245,7 @@ export function EditableCell<T extends { id: string }>({
   return (
     <div 
       className={cn(
-        "p-3 h-full flex items-start w-full relative group text-left",
+        "p-3 h-full flex items-start w-full relative group",
         column.editable && "cursor-pointer hover:bg-muted/50 border-2 border-transparent hover:border-primary/20 rounded-sm transition-all duration-200"
       )}
       onClick={() => {
