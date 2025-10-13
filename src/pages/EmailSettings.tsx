@@ -16,13 +16,13 @@ import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popove
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { supabase } from '../integrations/supabase/client';
 import { useAuth } from 'staysecure-auth';
-import { EmailNotifications } from 'staysecure-notifications';
-import EmailTemplateManager from '../components/admin/EmailTemplateManager';
-import RecentEmailNotifications from '../components/admin/RecentEmailNotifications';
+import { useUserRole } from '../hooks/useUserRole';
+import { EmailNotifications, EmailTemplateManager, RecentEmailNotifications } from 'staysecure-notifications';
 
 export default function EmailSettings() {
   const [activeTab, setActiveTab] = useState('preferences');
   const { user } = useAuth();
+  const { isSuperAdmin } = useUserRole();
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -93,6 +93,7 @@ export default function EmailSettings() {
 
         <TabsContent value="templates" className="space-y-6">
           <EmailTemplateManager
+            supabaseClient={supabase}
             Button={Button}
             Card={Card}
             CardContent={CardContent}
@@ -118,11 +119,13 @@ export default function EmailSettings() {
             Popover={Popover}
             PopoverContent={PopoverContent}
             PopoverTrigger={PopoverTrigger}
+            isSuperAdmin={isSuperAdmin}
           />
         </TabsContent>
 
         <TabsContent value="notifications" className="space-y-6">
           <RecentEmailNotifications
+            supabaseClient={supabase}
             Button={Button}
             Card={Card}
             CardContent={CardContent}
