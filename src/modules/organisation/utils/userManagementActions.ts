@@ -48,34 +48,38 @@ export const handleCreateUser = async (
 ) => {
   try {
     // Create user via Supabase Edge Function
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ufvingocbzegpgjknzhm.supabase.co'
-    const response = await fetch(`${supabaseUrl}/functions/v1/create-user`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVmdmluZ29jYnplZ3BnamtuemhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDgzNjQ2MTUsImV4cCI6MjA2Mzk0MDYxNX0.lEUYYYZnZcWtJLdcDk4qUm2M_zL5Xv58N0FheSHgGp0'}`
-      },
-      body: JSON.stringify(newUser)
+    const { data, error } = await supabase.functions.invoke('create-user', {
+      body: newUser
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to create user');
+    if (error) {
+      throw new Error(error.message || 'Failed to create user');
     }
 
-    const { user } = await response.json();
+    // Check if the function returned an error (since Edge Functions return 200 even for errors)
+    if (data?.error) {
+      console.error('Edge Function returned error:', data.error);
+      console.error('Full Edge Function response:', data);
+      throw new Error(data.error);
+    }
 
-    // Update profile with additional data
+    if (!data || !data.user) {
+      throw new Error('No user data returned from create-user function');
+    }
+
+    const { user } = data;
+
+    // Update profile with additional data (except status - let Edge Function handle it)
     if (user?.id) {
       await updateProfile(user.id, {
         full_name: newUser.full_name,
         first_name: newUser.first_name,
         last_name: newUser.last_name,
-        username: newUser.username,
+        username: newUser.email, // Store email as username
         phone: newUser.phone,
         location: newUser.location,
         location_id: newUser.location_id,
-        status: newUser.status,
+        // Don't update status - Edge Function sets it to 'Pending' for activation
         bio: newUser.bio,
         employee_id: newUser.employee_id,
       });

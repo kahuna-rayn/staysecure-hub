@@ -50,7 +50,7 @@ export const useUserProfiles = () => {
         .from('profiles')
         .select('*')
         .neq('status', 'Deleted')
-        .order('created_at', { ascending: false });
+        .order('full_name', { ascending: true });
 
       if (profilesError) throw profilesError;
 

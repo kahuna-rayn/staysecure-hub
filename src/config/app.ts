@@ -1,7 +1,7 @@
 export const appConfig = {
   supabase: {
-    url: "https://ufvingocbzegpgjknzhm.supabase.co",
-    anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVmdmluZ29jYnplZ3BnamtuemhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDgzNjQ2MTUsImV4cCI6MjA2Mzk0MDYxNX0.lEUYYYZnZcWtJLdcDk4qUm2M_zL5Xv58N0FheSHgGp0"
+    url: "https://cleqfnrbiqpxpzxkatda.supabase.co",
+    anonKey: "sb_publishable_bGMmJHoaG9v29DQ4GrvuKA_BvHrHKf_"
   },
   app: {
     name: "StaySecure Hub",

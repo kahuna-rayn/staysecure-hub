@@ -5,8 +5,8 @@ import { AuthProvider } from "staysecure-auth";
 import { supabase } from "./config/supabase";
 import Dashboard from "./pages/Dashboard";
 import LoginPage from "./pages/LoginPage";
-import ResetPassword from "./pages/ResetPassword";
-import ActivateAccount from "./pages/ActivateAccount";
+import { ResetPassword } from "staysecure-auth";
+import { ActivateAccount } from "staysecure-auth";
 import Notifications from "./pages/Notifications";
 import EmailSettings from "./pages/EmailSettings";
 import Organisation from "./pages/Organisation";
@@ -23,11 +23,22 @@ const RecoveryRedirect = () => {
     const hash = location.hash || '';
     const searchParams = new URLSearchParams(location.search);
     
-    // Check if this is a password reset link
-    if (hash.includes('type=recovery') || searchParams.get('type') === 'recovery') {
-      // Redirect to reset password page with the hash/search params
-      navigate('/reset-password' + location.search + location.hash, { replace: true });
-    }
+// Check if this is a password reset or activation link
+if (hash.includes('type=recovery') || searchParams.get('type') === 'recovery') {
+  // If we're already on activate-account page, stay there
+  if (location.pathname === '/activate-account') {
+    return;
+  }
+  
+  // Otherwise, redirect to reset password page
+  navigate('/reset-password' + location.search + location.hash, { replace: true });
+  return;
+}
+
+// Check if this is an account activation link
+if (hash.includes('type=invite') || searchParams.get('type') === 'invite') {
+  navigate('/activate-account' + location.search + location.hash, { replace: true });
+}
     
     // Check if this is an account activation link
     if (hash.includes('type=invite') || searchParams.get('type') === 'invite') {

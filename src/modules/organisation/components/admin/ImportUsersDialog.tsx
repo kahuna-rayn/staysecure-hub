@@ -40,6 +40,7 @@ const ImportUsersDialog: React.FC<ImportUsersDialogProps> = ({ onImportComplete,
     },
   });
 
+
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (file) {
@@ -77,10 +78,10 @@ const ImportUsersDialog: React.FC<ImportUsersDialogProps> = ({ onImportComplete,
   });
 
   const generateSampleCSV = () => {
-    const headers = ['Email', 'Full Name', 'First Name', 'Last Name', 'Phone', 'Location', 'Bio', 'Employee ID'];
+    const headers = ['Email', 'Full Name', 'First Name', 'Last Name', 'Phone', 'Employee ID', 'Access Level'];
     const sampleData = [
-      ['john.doe@company.com', 'John Doe', 'John', 'Doe', '+1-555-0123', 'New York Office', 'Software Engineer with 5 years experience', 'EMP-2024-001'],
-      ['jane.smith@company.com', 'Jane Smith', 'Jane', 'Smith', '+1-555-0124', 'London Office', 'Marketing Manager', 'EMP-2024-002']
+      ['john.doe@company.com', 'John Doe', 'John', 'Doe', '+1-555-0123', 'EMP-2024-001', 'User'],
+      ['jane.smith@company.com', 'Jane Smith', 'Jane', 'Smith', '+1-555-0124', 'EMP-2024-002', 'Manager']
     ];
     
     const csvContent = [headers, ...sampleData]
@@ -130,6 +131,31 @@ const ImportUsersDialog: React.FC<ImportUsersDialogProps> = ({ onImportComplete,
     return {
       isValid: !!validLocation,
       locationId: validLocation?.id
+    };
+  };
+
+
+  // Helper function to validate access level
+  const validateAccessLevel = (accessLevel: string): { isValid: boolean; value?: string } => {
+    if (!accessLevel) {
+      return { isValid: false };
+    }
+
+    const trimmedLevel = accessLevel.trim().toLowerCase();
+    const validLevels = ['user', 'manager', 'client_admin', 'admin', 'author'];
+    
+    // Map display values to backend values
+    const levelMapping: { [key: string]: string } = {
+      'admin': 'client_admin',
+      'client admin': 'client_admin'
+    };
+
+    const backendValue = levelMapping[trimmedLevel] || trimmedLevel;
+    const isValid = validLevels.includes(backendValue);
+
+    return {
+      isValid,
+      value: isValid ? backendValue : undefined
     };
   };
 
@@ -227,8 +253,9 @@ const ImportUsersDialog: React.FC<ImportUsersDialogProps> = ({ onImportComplete,
 
     console.log('Processing user:', email);
 
-    const locationName = row['Location'] || row['location'] || '';
-    const locationValidation = validateLocation(locationName);
+    // Validate all fields
+    const accessLevelValue = row['Access Level'] || row['access_level'] || '';
+    const accessLevelValidation = validateAccessLevel(accessLevelValue);
 
     // Use our create-user edge function instead of direct signUp
     const { data: authData, error: authError } = await supabase.functions.invoke('create-user', {
@@ -239,12 +266,9 @@ const ImportUsersDialog: React.FC<ImportUsersDialogProps> = ({ onImportComplete,
         last_name: row['Last Name'] || row['last_name'] || '',
         username: row['Username'] || row['username'] || '',
         phone: row['Phone'] || row['phone'] || '',
-        location: locationValidation.isValid ? locationName : '',
-        location_id: locationValidation.locationId || null,
         status: 'Pending',
-        bio: row['Bio'] || row['bio'] || '',
         employee_id: row['Employee ID'] || row['employee_id'] || '',
-        access_level: 'User'
+        access_level: accessLevelValidation.isValid ? accessLevelValidation.value : 'user'
       }
     });
 
@@ -262,13 +286,29 @@ const ImportUsersDialog: React.FC<ImportUsersDialogProps> = ({ onImportComplete,
       throw new Error(friendlyError);
     }
 
+    // Collect all warnings
+    const warnings = [];
+    
+    if (!locationValidation.isValid && locationName) {
+      warnings.push({
+        field: 'Location',
+        value: locationName,
+        message: `Location "${locationName}" not found in system - user created without location assignment`
+      });
+    }
+    
+    if (!accessLevelValidation.isValid && accessLevelValue) {
+      warnings.push({
+        field: 'Access Level',
+        value: accessLevelValue,
+        message: `Access Level "${accessLevelValue}" is invalid - user created with default "User" access level`
+      });
+    }
+
     return { 
       email, 
       success: true, 
-      locationWarning: !locationValidation.isValid && locationName ? {
-        location: locationName,
-        message: `Location "${locationName}" not found in system - user created without location assignment`
-      } : null
+      warnings: warnings.length > 0 ? warnings : null
     };
   };
 
@@ -305,7 +345,7 @@ const ImportUsersDialog: React.FC<ImportUsersDialogProps> = ({ onImportComplete,
           console.log('Processing', data.length, 'rows');
           let successCount = 0;
           const errors: ImportError[] = [];
-          const locationWarnings: ImportError[] = [];
+          const warnings: ImportError[] = [];
 
           // Process users sequentially to avoid overwhelming the system
           for (let i = 0; i < data.length; i++) {
@@ -325,19 +365,17 @@ const ImportUsersDialog: React.FC<ImportUsersDialogProps> = ({ onImportComplete,
               successCount++;
               console.log(`Successfully processed user ${i + 1}`);
               
-              // Collect location warnings
-              if (result.locationWarning) {
-                console.log('Adding location warning:', result.locationWarning);
-                locationWarnings.push({
-                  rowNumber: i + 2, // +2 because row 1 is headers, and i is 0-indexed
-                  identifier: email,
-                  field: 'Location',
-                  error: result.locationWarning.message,
-                  rawData: row
+              // Collect all warnings
+              if (result.warnings) {
+                result.warnings.forEach((warning: any) => {
+                  warnings.push({
+                    rowNumber: i + 2, // +2 because row 1 is headers, and i is 0-indexed
+                    identifier: email,
+                    field: warning.field,
+                    error: warning.message,
+                    rawData: row
+                  });
                 });
-              } else {
-                const locationName = row['Location'] || row['location'] || '';
-                console.log('No location warning for user:', email, 'location:', locationName);
               }
             } catch (error: any) {
               console.error(`Error importing user ${i + 1}:`, error);
@@ -357,22 +395,22 @@ const ImportUsersDialog: React.FC<ImportUsersDialogProps> = ({ onImportComplete,
             }
           }
 
-          console.log('Import completed. Success:', successCount, 'Errors:', errors.length, 'Location Warnings:', locationWarnings.length);
+          console.log('Import completed. Success:', successCount, 'Errors:', errors.length, 'Warnings:', warnings.length);
 
           setUploadedFile(null);
           setIsProcessing(false);
           setIsOpen(false);
 
           // Show combined error and warning report through parent component
-          if ((errors.length > 0 || locationWarnings.length > 0) && onImportError) {
+          if ((errors.length > 0 || warnings.length > 0) && onImportError) {
             setTimeout(() => {
-              onImportError(errors, locationWarnings, { success: successCount, total: data.length });
+              onImportError(errors, warnings, { success: successCount, total: data.length });
             }, 300);
             
-            if (errors.length > 0 && locationWarnings.length > 0) {
+            if (errors.length > 0 && warnings.length > 0) {
               toast({
                 title: "Import completed with errors and warnings",
-                description: `${successCount} users imported successfully. ${errors.length} failed, ${locationWarnings.length} have location warnings.`,
+                description: `${successCount} users imported successfully. ${errors.length} failed, ${warnings.length} have validation warnings.`,
                 variant: "destructive",
               });
             } else if (errors.length > 0) {
@@ -381,10 +419,10 @@ const ImportUsersDialog: React.FC<ImportUsersDialogProps> = ({ onImportComplete,
                 description: `${successCount} users imported successfully. ${errors.length} failed. Opening error report...`,
                 variant: "destructive",
               });
-            } else if (locationWarnings.length > 0) {
+            } else if (warnings.length > 0) {
               toast({
-                title: "Import completed with location warnings",
-                description: `${successCount} users imported successfully. ${locationWarnings.length} users have invalid locations. Opening warning report...`,
+                title: "Import completed with warnings",
+                description: `${successCount} users imported successfully. ${warnings.length} users have validation warnings. Opening warning report...`,
                 variant: "default",
               });
             }
