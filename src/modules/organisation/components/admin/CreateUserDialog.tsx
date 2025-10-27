@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useOrganisationContext } from '../../context/OrganisationContext';
 import type { NewUser } from '../../types';
 import EditableField from '@/modules/organisation/components/profile/EditableField';
+import { useAuth } from 'staysecure-auth';
 
 interface CreateUserDialogProps {
   isOpen: boolean;
@@ -34,6 +35,24 @@ const [editingField, setEditingField] = useState<string | null>(null);
 const [saving, setSaving] = useState(false);
 const { supabaseClient } = useOrganisationContext();
 const [isFullNameManuallyEdited, setIsFullNameManuallyEdited] = useState(false);
+const { user } = useAuth();
+
+// Check if current user is super_admin
+const { data: currentUserRole } = useQuery({
+  queryKey: ['user-role', user?.id],
+  queryFn: async () => {
+    if (!user?.id) return null;
+    const { data } = await supabaseClient
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .single();
+    return data?.role;
+  },
+  enabled: !!user?.id
+});
+
+const isSuperAdmin = currentUserRole === 'super_admin';
 
   // Form validation
   const isFormValid = () => {
@@ -41,6 +60,7 @@ const [isFullNameManuallyEdited, setIsFullNameManuallyEdited] = useState(false);
       newUser.first_name?.trim(),
       newUser.last_name?.trim(),
       newUser.email?.trim(),
+      newUser.access_level,
       newUser.location_id
     ];
     
@@ -104,7 +124,6 @@ const [isFullNameManuallyEdited, setIsFullNameManuallyEdited] = useState(false);
     //console.log('Auto-generating full_name:', { firstName, lastName, fullName: updatedUser.full_name });
   }
   
-  console.log('Final updatedUser:', updatedUser);
   onUserChange(updatedUser);
 };
 
@@ -184,39 +203,81 @@ const handleFullNameChange = (value: string) => {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="full_name">Full Name (Auto-generated, editable)</Label>
-            <Input
-              id="full_name"
-              value={newUser.full_name || `${newUser.first_name} ${newUser.last_name}`.trim()}
-              onChange={(e) => handleFullNameChange(e.target.value)}
-              placeholder="Enter full name"
-              className="flex-1"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="email">Email Address <span className="text-red-500">*</span></Label>
-            <Input
-              id="email"
-              type="email"
-              value={newUser.email}
-              onChange={(e) => updateField('email', e.target.value)}
-              placeholder="Enter email address"
-              required
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="full_name">Full Name (Auto-generated, editable)</Label>
+              <Input
+                id="full_name"
+                value={newUser.full_name || `${newUser.first_name} ${newUser.last_name}`.trim()}
+                onChange={(e) => handleFullNameChange(e.target.value)}
+                placeholder="Enter full name"
+                className="flex-1"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email Address <span className="text-red-500">*</span></Label>
+              <Input
+                id="email"
+                type="email"
+                value={newUser.email}
+                onChange={(e) => updateField('email', e.target.value)}
+                placeholder="Enter email address"
+                required
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="phone">Phone</Label>
-            <Input
-              id="phone"
-              value={newUser.phone}
-              onChange={(e) => updateField('phone', e.target.value)}
-              placeholder="Enter phone number"
-            />
+            <div className="space-y-2">
+              <Label htmlFor="access_level">Access Level <span className="text-red-500">*</span></Label>
+              <Select 
+                value={newUser.access_level} 
+                onValueChange={(value) => {
+                  // Map display values to backend values
+                  const backendValue = value === 'Admin' ? 'client_admin' : value.toLowerCase();
+                  updateField('access_level', backendValue);
+                }}
+                required
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select access level" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">User</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="client_admin">Admin</SelectItem>
+                  {isSuperAdmin && <SelectItem value="author">Author</SelectItem>}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="location">Location <span className="text-red-500">*</span></Label>
+              <Select value={newUser.location_id || ''} onValueChange={handleLocationChange} required>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a location" />
+                </SelectTrigger>
+                <SelectContent>
+                  {locations?.map((location) => (
+                    <SelectItem key={location.id} value={location.id}>
+                      {location.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone</Label>
+              <Input
+                id="phone"
+                value={newUser.phone}
+                onChange={(e) => updateField('phone', e.target.value)}
+                placeholder="Enter phone number"
+              />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="employee_id">Employee ID</Label>
               <Input
@@ -226,51 +287,6 @@ const handleFullNameChange = (value: string) => {
                 placeholder="Enter employee ID"
               />
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="status">Status</Label>
-              <Select value={newUser.status} onValueChange={(value) => updateField('status', value)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Active">Active</SelectItem>
-                  <SelectItem value="Inactive">Inactive</SelectItem>
-                  <SelectItem value="Pending">Pending</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="access_level">Access Level</Label>
-              <Select value={newUser.access_level} onValueChange={(value) => updateField('access_level', value)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="User">User</SelectItem>
-                  <SelectItem value="Manager">Manager</SelectItem>
-                  <SelectItem value="Admin">Admin</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="location">Location <span className="text-red-500">*</span></Label>
-            <Select value={newUser.location_id || ''} onValueChange={handleLocationChange}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select a location" />
-              </SelectTrigger>
-              <SelectContent>
-                {locations?.map((location) => (
-                  <SelectItem key={location.id} value={location.id}>
-                    {location.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
 
           <div className="space-y-2">
