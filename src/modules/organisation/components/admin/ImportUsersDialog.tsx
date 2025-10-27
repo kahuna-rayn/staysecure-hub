@@ -289,14 +289,6 @@ const ImportUsersDialog: React.FC<ImportUsersDialogProps> = ({ onImportComplete,
     // Collect all warnings
     const warnings = [];
     
-    if (!locationValidation.isValid && locationName) {
-      warnings.push({
-        field: 'Location',
-        value: locationName,
-        message: `Location "${locationName}" not found in system - user created without location assignment`
-      });
-    }
-    
     if (!accessLevelValidation.isValid && accessLevelValue) {
       warnings.push({
         field: 'Access Level',
@@ -559,11 +551,11 @@ const ImportUsersDialog: React.FC<ImportUsersDialogProps> = ({ onImportComplete,
           </div>
 
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h4 className="font-semibold text-blue-900 mb-2">Required Columns</h4>
+            <h4 className="font-semibold text-blue-900 mb-2">Available Columns</h4>
             <div className="flex flex-wrap gap-2 mb-4">
               {[
                 'Email', 'Full Name', 'First Name', 'Last Name', 
-                'Phone', 'Location', 'Bio', 'Employee ID'
+                'Phone', 'Employee ID', 'Access Level'
               ].map((column) => (
                 <Badge key={column} variant="outline" className="text-xs">
                   {column}
