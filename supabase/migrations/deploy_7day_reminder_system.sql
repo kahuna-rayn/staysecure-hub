@@ -1,0 +1,184 @@
+-- Deploy 7-day reminder system with max 3 reminders
+-- Run this in Supabase SQL Editor
+
+-- 1. Create lesson_reminder_counts table
+CREATE TABLE IF NOT EXISTS public.lesson_reminder_counts (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  lesson_id UUID NOT NULL REFERENCES public.lessons(id) ON DELETE CASCADE,
+  learning_track_id UUID NOT NULL REFERENCES public.learning_tracks(id) ON DELETE CASCADE,
+  reminder_count INTEGER NOT NULL DEFAULT 0,
+  last_reminder_sent_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  
+  -- Ensure one record per user/lesson combination
+  UNIQUE(user_id, lesson_id)
+);
+
+-- Add indexes for performance
+CREATE INDEX IF NOT EXISTS idx_lesson_reminder_counts_user_lesson 
+ON public.lesson_reminder_counts(user_id, lesson_id);
+
+CREATE INDEX IF NOT EXISTS idx_lesson_reminder_counts_track 
+ON public.lesson_reminder_counts(learning_track_id);
+
+CREATE INDEX IF NOT EXISTS idx_lesson_reminder_counts_last_sent 
+ON public.lesson_reminder_counts(last_reminder_sent_at);
+
+-- Enable RLS
+ALTER TABLE public.lesson_reminder_counts ENABLE ROW LEVEL SECURITY;
+
+-- RLS Policies
+CREATE POLICY "Users can view their own reminder counts" ON public.lesson_reminder_counts
+  FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Service role can manage all reminder counts" ON public.lesson_reminder_counts
+  FOR ALL USING (auth.role() = 'service_role');
+
+-- Add helpful comment
+COMMENT ON TABLE public.lesson_reminder_counts IS 'Tracks how many reminders have been sent for each user/lesson combination';
+COMMENT ON COLUMN public.lesson_reminder_counts.reminder_count IS 'Number of reminders sent (max 3 by default)';
+COMMENT ON COLUMN public.lesson_reminder_counts.last_reminder_sent_at IS 'When the last reminder was sent (used for 7-day cooldown)';
+
+-- 2. Update the get_users_needing_lesson_reminders function
+CREATE OR REPLACE FUNCTION public.get_users_needing_lesson_reminders()
+RETURNS TABLE (
+  user_id UUID,
+  user_email TEXT,
+  lesson_id UUID,
+  lesson_title TEXT,
+  lesson_description TEXT,
+  learning_track_id UUID,
+  learning_track_title TEXT,
+  available_date DATE,
+  order_index INTEGER,
+  reminder_type TEXT
+) 
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN QUERY
+  WITH user_tracks AS (
+    -- Get all users enrolled in learning tracks with their progress
+    -- Only include users who have lesson_reminders enabled in their email preferences
+    SELECT 
+      ultp.user_id,
+      ultp.learning_track_id,
+      ultp.enrolled_at,
+      ultp.current_lesson_order,
+      lt.title::TEXT as track_title,
+      lt.schedule_type,
+      lt.start_date,
+      lt.end_date,
+      lt.duration_weeks,
+      lt.lessons_per_week,
+      lt.allow_all_lessons_immediately,
+      lt.schedule_days,
+      lt.max_lessons_per_week,
+      au.email::TEXT as user_email
+    FROM public.user_learning_track_progress ultp
+    INNER JOIN public.learning_tracks lt ON ultp.learning_track_id = lt.id
+    INNER JOIN auth.users au ON ultp.user_id = au.id
+    LEFT JOIN public.email_preferences ep ON ep.user_id = ultp.user_id
+    WHERE ultp.completed_at IS NULL -- Only active enrollments
+      AND lt.status = 'published'
+      AND COALESCE(ep.email_enabled, true) = true -- Email enabled globally
+      AND COALESCE(ep.lesson_reminders, true) = true -- Lesson reminders enabled
+  ),
+  track_lessons AS (
+    -- Get all lessons in learning tracks with their order
+    SELECT 
+      ltl.learning_track_id,
+      ltl.lesson_id,
+      ltl.order_index,
+      l.title::TEXT as lesson_title,
+      l.description::TEXT as lesson_description,
+      l.status as lesson_status
+    FROM public.learning_track_lessons ltl
+    INNER JOIN public.lessons l ON ltl.lesson_id = l.id
+    WHERE l.status = 'published'
+  ),
+  lesson_availability AS (
+    -- Calculate lesson availability for each user
+    -- This is a simplified version - you may need to adjust based on your scheduling logic
+    SELECT 
+      ut.user_id,
+      ut.user_email as email,
+      tl.lesson_id,
+      tl.lesson_title,
+      tl.lesson_description,
+      ut.learning_track_id,
+      ut.track_title,
+      tl.order_index,
+      CASE 
+        -- If all lessons are available immediately
+        WHEN ut.allow_all_lessons_immediately THEN CURRENT_DATE
+        -- If fixed dates schedule
+        WHEN ut.schedule_type = 'fixed_dates' AND ut.start_date IS NOT NULL THEN
+          ut.start_date::DATE
+        -- If duration based schedule
+        WHEN ut.schedule_type = 'duration_based' AND ut.lessons_per_week > 0 THEN
+          (ut.enrolled_at::DATE + (tl.order_index / ut.lessons_per_week * 7)::INTEGER)
+        -- Default to enrollment date
+        ELSE ut.enrolled_at::DATE
+      END as available_date
+    FROM user_tracks ut
+    INNER JOIN track_lessons tl ON ut.learning_track_id = tl.learning_track_id
+    LEFT JOIN public.user_lesson_progress ulp ON 
+      ulp.user_id = ut.user_id AND ulp.lesson_id = tl.lesson_id
+    WHERE ulp.completed_at IS NULL -- Lesson not yet completed
+  ),
+  reminder_counts AS (
+    -- Get current reminder counts for each user/lesson
+    SELECT 
+      lrc.user_id,
+      lrc.lesson_id,
+      lrc.reminder_count,
+      lrc.last_reminder_sent_at
+    FROM public.lesson_reminder_counts lrc
+  )
+  SELECT DISTINCT
+    la.user_id,
+    la.email,
+    la.lesson_id,
+    la.lesson_title,
+    la.lesson_description,
+    la.learning_track_id,
+    la.track_title,
+    la.available_date,
+    la.order_index,
+    CASE
+      -- Lesson is available now and not completed
+      WHEN la.available_date <= CURRENT_DATE THEN 'available_now'
+      -- Lesson becomes available soon (within 3 days)
+      WHEN la.available_date <= CURRENT_DATE + INTERVAL '3 days' THEN 'available_soon'
+      ELSE 'not_yet'
+    END as reminder_type
+  FROM lesson_availability la
+  LEFT JOIN reminder_counts rc ON 
+    rc.user_id = la.user_id AND rc.lesson_id = la.lesson_id
+  WHERE 
+    -- Lesson is available now or soon
+    (la.available_date <= CURRENT_DATE OR la.available_date <= CURRENT_DATE + INTERVAL '3 days')
+    -- Haven't exceeded max reminders (default 3)
+    AND COALESCE(rc.reminder_count, 0) < 3
+    -- Either no previous reminder, or last reminder was 7+ days ago
+    AND (
+      rc.last_reminder_sent_at IS NULL 
+      OR rc.last_reminder_sent_at <= NOW() - INTERVAL '7 days'
+    )
+  ORDER BY la.available_date, la.order_index;
+END;
+$$;
+
+-- Grant permissions
+GRANT EXECUTE ON FUNCTION public.get_users_needing_lesson_reminders() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_users_needing_lesson_reminders() TO service_role;
+
+-- Add comment
+COMMENT ON FUNCTION public.get_users_needing_lesson_reminders() IS 'Returns list of users who need lesson reminders. Uses 7-day intervals with max 3 reminders per lesson';
+
+-- Success message
+SELECT '7-day reminder system deployed successfully!' as status;

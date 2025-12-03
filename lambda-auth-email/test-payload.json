@@ -1,0 +1,1 @@
+{"to":"naresh@raynsecure.com","subject":"Test Email from Lambda","html":"<h1>Test Email</h1><p>This is a test email from the Lambda function.</p>","template":"auth"}
