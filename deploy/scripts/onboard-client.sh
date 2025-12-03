@@ -14,73 +14,54 @@ NC='\033[0m' # No Color
 # Configuration
 ENVIRONMENT=${1:-prod}  # prod, staging, dev
 CLIENT_NAME_PARAM=${2:-""}
+CLIENT_DOMAIN_PARAM=${3:-""}
+DATA_TYPE_PARAM=${4:-""}
+REGION_PARAM=${5:-""}
 
 # Base domain for all clients
 BASE_DOMAIN="staysecure-learn.raynsecure.com"
 
-# Parse optional parameters
-# For staging/dev: position 2 might be DATA_TYPE (demo/seed) or CLIENT_NAME
-# For prod: position 2 is always CLIENT_NAME, position 3 might be DATA_TYPE or CLIENT_DOMAIN
-if [ "$ENVIRONMENT" = "staging" ] || [ "$ENVIRONMENT" = "dev" ]; then
-    # For staging/dev, check if position 2 is a data type (demo/seed)
-    if [ "$CLIENT_NAME_PARAM" = "demo" ] || [ "$CLIENT_NAME_PARAM" = "seed" ]; then
-        # Position 2 is DATA_TYPE, CLIENT_NAME will default to ENVIRONMENT
-        CLIENT_NAME=""
-        DATA_TYPE=${CLIENT_NAME_PARAM}
-        CLIENT_DOMAIN=""
-        REGION=${3:-ap-southeast-1}
-    elif [[ "${CLIENT_NAME_PARAM}" == *"/"* ]]; then
-        # Position 2 is CLIENT_DOMAIN (contains '/')
-        CLIENT_NAME=""
-        CLIENT_DOMAIN=${CLIENT_NAME_PARAM}
-        DATA_TYPE=${3:-seed}
-        REGION=${4:-ap-southeast-1}
-    else
-        # Position 2 is CLIENT_NAME (explicitly provided)
-        CLIENT_NAME=${CLIENT_NAME_PARAM}
-        # Check if position 3 looks like a domain or is data type
-        if [[ "${3:-}" == *"/"* ]]; then
-            CLIENT_DOMAIN=${3:-""}
-            DATA_TYPE=${4:-seed}
-            REGION=${5:-ap-southeast-1}
-        else
-            CLIENT_DOMAIN=""
-            DATA_TYPE=${3:-seed}
-            REGION=${4:-ap-southeast-1}
-        fi
-    fi
-else
-    # For prod: position 2 is CLIENT_NAME (required)
-    CLIENT_NAME=${CLIENT_NAME_PARAM}
-    # Check if position 3 looks like a domain (contains '/') or is data type
-    if [[ "${3:-}" == *"/"* ]]; then
-        # Position 3 is CLIENT_DOMAIN
-        CLIENT_DOMAIN=${3:-""}
-        DATA_TYPE=${4:-seed}
-        REGION=${5:-ap-southeast-1}
-    else
-        # Position 3 is DATA_TYPE (CLIENT_DOMAIN will be auto-constructed)
-        CLIENT_DOMAIN=""
-        DATA_TYPE=${3:-seed}
-        REGION=${4:-ap-southeast-1}
-    fi
-fi
+# Parse parameters with consistent order regardless of environment
+# Order: [environment] <client-name> [client-domain] [data-type] [region]
 
-# For staging/dev environments, default CLIENT_NAME to ENVIRONMENT if not provided
-# For prod, CLIENT_NAME is required
-if [ -z "$CLIENT_NAME" ]; then
+# CLIENT_NAME: Required for prod, optional for dev/staging (defaults to environment name)
+if [ -z "$CLIENT_NAME_PARAM" ]; then
     if [ "$ENVIRONMENT" = "prod" ]; then
         echo -e "${RED}Error: Client name is required for production environment${NC}"
         echo "Usage: ./onboard-client.sh [prod|staging|dev] <client-name> [client-domain] [data-type] [region]"
-        echo "Example: ./onboard-client.sh prod rayn [data-type] [region]"
-        echo "Example: ./onboard-client.sh prod client1 seed"
-        echo "Note: client-domain defaults to staysecure-learn.raynsecure.com/<client-name> if not provided"
+        echo "Example: ./onboard-client.sh prod rayn"
+        echo "Example: ./onboard-client.sh prod master master.staysecure-learn.raynsecure.com seed"
+        echo "Example: ./onboard-client.sh dev master master.staysecure-learn.raynsecure.com demo"
         exit 1
     else
-        # Default to ENVIRONMENT name for staging/dev (so staging -> "staging", dev -> "dev")
+        # Default to ENVIRONMENT name for staging/dev
         CLIENT_NAME="$ENVIRONMENT"
         echo -e "${YELLOW}Note: Client name not provided, defaulting to '${ENVIRONMENT}' for ${ENVIRONMENT} environment${NC}"
     fi
+else
+    CLIENT_NAME="$CLIENT_NAME_PARAM"
+fi
+
+# CLIENT_DOMAIN: Check if position 3 is a domain (contains '.' or '/') or if it's empty/data-type
+if [ -n "$CLIENT_DOMAIN_PARAM" ]; then
+    if [[ "$CLIENT_DOMAIN_PARAM" == *"/"* ]] || ([[ "$CLIENT_DOMAIN_PARAM" == *"."* ]] && [[ "$CLIENT_DOMAIN_PARAM" != "seed" ]] && [[ "$CLIENT_DOMAIN_PARAM" != "demo" ]]); then
+        # Position 3 is CLIENT_DOMAIN
+        CLIENT_DOMAIN="$CLIENT_DOMAIN_PARAM"
+        # Position 4 is DATA_TYPE
+        DATA_TYPE=${DATA_TYPE_PARAM:-seed}
+        # Position 5 is REGION
+        REGION=${REGION_PARAM:-ap-southeast-1}
+    else
+        # Position 3 is DATA_TYPE (not a domain), CLIENT_DOMAIN will be auto-constructed
+        CLIENT_DOMAIN=""
+        DATA_TYPE=${CLIENT_DOMAIN_PARAM}
+        REGION=${DATA_TYPE_PARAM:-ap-southeast-1}
+    fi
+else
+    # Position 3 is empty, CLIENT_DOMAIN will be auto-constructed
+    CLIENT_DOMAIN=""
+    DATA_TYPE=${DATA_TYPE_PARAM:-seed}
+    REGION=${REGION_PARAM:-ap-southeast-1}
 fi
 
 # Auto-construct CLIENT_DOMAIN from CLIENT_NAME if not provided
@@ -137,12 +118,19 @@ echo -e "${YELLOW}Note: The database password is set during project creation.${N
 echo -e "${YELLOW}      To reset it later: Supabase Dashboard → Settings → Database → Database Password${NC}"
 echo ""
 
-# Determine project name: if CLIENT_NAME equals ENVIRONMENT, just use CLIENT_NAME
-# Otherwise use CLIENT_NAME-ENVIRONMENT format
-if [ "$CLIENT_NAME" = "$ENVIRONMENT" ]; then
-    PROJECT_NAME="${CLIENT_NAME}"
+# Determine project name
+# For staging/dev: always use just the environment name (staging, dev)
+# For prod: use CLIENT_NAME-ENVIRONMENT format if different, otherwise just CLIENT_NAME
+if [ "$ENVIRONMENT" = "staging" ] || [ "$ENVIRONMENT" = "dev" ]; then
+    PROJECT_NAME="${ENVIRONMENT}"
 else
-    PROJECT_NAME="${CLIENT_NAME}-${ENVIRONMENT}"
+    # Production: if CLIENT_NAME equals ENVIRONMENT, just use CLIENT_NAME
+    # Otherwise use CLIENT_NAME-ENVIRONMENT format
+    if [ "$CLIENT_NAME" = "$ENVIRONMENT" ]; then
+        PROJECT_NAME="${CLIENT_NAME}"
+    else
+        PROJECT_NAME="${CLIENT_NAME}-${ENVIRONMENT}"
+    fi
 fi
 
 echo "Creating project with name: '${PROJECT_NAME}'"
@@ -183,8 +171,12 @@ while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
 done
 
 # Link to the project (now that it's ready)
+# Note: This is optional for cloud-only operations, but some CLI commands may require it
+# If Docker is not available, this will fail but we continue anyway
 echo -e "${GREEN}Linking to project...${NC}"
-supabase link --project-ref ${PROJECT_REF}
+supabase link --project-ref ${PROJECT_REF} 2>/dev/null || {
+    echo -e "${YELLOW}Warning: Could not link project (Docker may not be running, but continuing anyway)${NC}"
+}
 
 # Prepare direct Postgres connection string (bypass pooler for admin operations)
 CONNECTION_STRING="host=db.${PROJECT_REF}.supabase.co port=6543 user=postgres dbname=postgres sslmode=require"
@@ -241,83 +233,36 @@ if [ -f "backups/schema.dump" ]; then
     
     # Restore data based on type (using custom format if available, otherwise SQL)
     if [ "$DATA_TYPE" = "demo" ] && [ -f "backups/demo.dump" ]; then
-        echo -e "${GREEN}Restoring demo data (excluding auth.users and user_roles)...${NC}"
+        echo -e "${GREEN}Restoring demo data...${NC}"
         
-        # Restore profiles first (with FK checks disabled - profiles.id references auth.users.id but we won't restore auth.users)
-        # session_replication_role = replica allows FK violations during restore
-        echo -e "${GREEN}Restoring profiles...${NC}"
-        pg_restore --no-owner --data-only --table=public.profiles backups/demo.dump 2>/dev/null | \
-        psql --host=db.${PROJECT_REF}.supabase.co --port=6543 --user=postgres \
+        # Restore auth.users first (needed for foreign key constraints with profiles and user_roles)
+        if [ -f "backups/auth.dump" ]; then
+            echo -e "${GREEN}Restoring auth.users...${NC}"
+            pg_restore --host=db.${PROJECT_REF}.supabase.co --port=6543 --user=postgres \
+                --dbname=postgres \
+                --verbose \
+                --no-owner \
+                --data-only \
+                backups/auth.dump 2>&1 | tee /tmp/restore-auth.log || {
+                    echo -e "${YELLOW}Warning: Some errors restoring auth.users (may be expected)${NC}"
+                }
+        else
+            echo -e "${YELLOW}Warning: auth.dump not found, skipping auth.users restore${NC}"
+            echo -e "${YELLOW}         Profiles and user_roles may fail to restore due to missing foreign keys${NC}"
+        fi
+        
+        # Restore all demo data from public schema (auth.users already restored from auth.dump)
+        # Using --schema=public excludes auth.users which is in auth schema
+        echo -e "${GREEN}Restoring demo data (public schema only, excluding auth.users)...${NC}"
+        pg_restore --host=db.${PROJECT_REF}.supabase.co --port=6543 --user=postgres \
             --dbname=postgres \
-            --variable ON_ERROR_STOP=0 \
-            --command 'SET session_replication_role = replica' \
-            --file /dev/stdin 2>&1 | tee /tmp/restore-profiles.log || {
-                echo -e "${YELLOW}Warning: Some errors restoring profiles (may be expected)${NC}"
+            --verbose \
+            --no-owner \
+            --data-only \
+            --schema=public \
+            backups/demo.dump 2>&1 | tee /tmp/restore-data.log || {
+                echo -e "${YELLOW}Warning: Some data restore errors occurred (may be expected)${NC}"
             }
-        
-        # Restore all other demo data (excluding profiles, user_roles, and auth.users)
-        # Note: created_by/updated_by columns allow NULL, so we'll set them to NULL after restore
-        echo -e "${GREEN}Restoring remaining demo data...${NC}"
-        pg_restore --no-owner --data-only --exclude-table=public.profiles --exclude-table=public.user_roles --exclude-table=auth.users backups/demo.dump 2>/dev/null | \
-        psql --host=db.${PROJECT_REF}.supabase.co --port=6543 --user=postgres \
-            --dbname=postgres \
-            --variable ON_ERROR_STOP=0 \
-            --command 'SET session_replication_role = replica' \
-            --file /dev/stdin 2>&1 | tee /tmp/restore-data.log || {
-                echo -e "${YELLOW}Warning: Some data restore errors occurred (may be expected for missing foreign keys)${NC}"
-            }
-        
-        # Set all created_by and updated_by columns to NULL (since they reference auth.users which we don't restore)
-        # Only update columns that actually exist in each table
-        echo -e "${GREEN}Setting created_by/updated_by columns to NULL...${NC}"
-        psql --host=db.${PROJECT_REF}.supabase.co --port=6543 --user=postgres \
-            --dbname=postgres \
-            --variable ON_ERROR_STOP=0 <<EOF 2>&1 | tee /tmp/nullify-user-refs.log
--- account_inventory: created_by, modified_by
-UPDATE public.account_inventory SET created_by = NULL WHERE created_by IS NOT NULL;
-UPDATE public.account_inventory SET modified_by = NULL WHERE modified_by IS NOT NULL;
-
--- email_layouts: created_by only
-UPDATE public.email_layouts SET created_by = NULL WHERE created_by IS NOT NULL;
-
--- email_preferences: created_by, updated_by
-UPDATE public.email_preferences SET created_by = NULL WHERE created_by IS NOT NULL;
-UPDATE public.email_preferences SET updated_by = NULL WHERE updated_by IS NOT NULL;
-
--- email_templates: created_by only
-UPDATE public.email_templates SET created_by = NULL WHERE created_by IS NOT NULL;
-
--- key_dates: created_by, modified_by (not updated_by)
-UPDATE public.key_dates SET created_by = NULL WHERE created_by IS NOT NULL;
-UPDATE public.key_dates SET modified_by = NULL WHERE modified_by IS NOT NULL;
-
--- learning_tracks: created_by only
-UPDATE public.learning_tracks SET created_by = NULL WHERE created_by IS NOT NULL;
-
--- lessons: created_by, updated_by
-UPDATE public.lessons SET created_by = NULL WHERE created_by IS NOT NULL;
-UPDATE public.lessons SET updated_by = NULL WHERE updated_by IS NOT NULL;
-
--- notification_rules: created_by only
-UPDATE public.notification_rules SET created_by = NULL WHERE created_by IS NOT NULL;
-
--- org_profile: created_by only
-UPDATE public.org_profile SET created_by = NULL WHERE created_by IS NOT NULL;
-
--- org_sig_roles: created_by only
-UPDATE public.org_sig_roles SET created_by = NULL WHERE created_by IS NOT NULL;
-
--- template_variables: created_by only
-UPDATE public.template_variables SET created_by = NULL WHERE created_by IS NOT NULL;
-
--- translation_change_log: updated_by only (not created_by)
-UPDATE public.translation_change_log SET updated_by = NULL WHERE updated_by IS NOT NULL;
-EOF
-        
-        # Re-enable foreign key checks
-        psql --host=db.${PROJECT_REF}.supabase.co --port=6543 --user=postgres \
-            --dbname=postgres \
-            --command 'SET session_replication_role = DEFAULT' > /dev/null 2>&1
         
         echo -e "${GREEN}✓ Demo data restored successfully${NC}"
     elif [ "$DATA_TYPE" = "seed" ] && [ -f "backups/seed.dump" ]; then
@@ -569,7 +514,6 @@ supabase functions deploy create-user --no-verify-jwt --project-ref ${PROJECT_RE
 supabase functions deploy delete-user --no-verify-jwt --project-ref ${PROJECT_REF}
 supabase functions deploy send-email --no-verify-jwt --project-ref ${PROJECT_REF}
 supabase functions deploy send-password-reset --no-verify-jwt --project-ref ${PROJECT_REF}
-supabase functions deploy update-password --no-verify-jwt --project-ref ${PROJECT_REF}
 supabase functions deploy update-user-password --no-verify-jwt --project-ref ${PROJECT_REF}
 supabase functions deploy translate-lesson --no-verify-jwt --project-ref ${PROJECT_REF}
 supabase functions deploy translation-status --no-verify-jwt --project-ref ${PROJECT_REF}
@@ -617,6 +561,37 @@ if [ $? -ne 0 ]; then
 fi
 
 echo -e "${GREEN}✓ Manager notification cron job scheduled (UTC 01:00 daily)${NC}"
+
+# Set client service key in master database for sync-lesson-content Edge Function
+# This allows the master database to sync content to this client database
+if [ -n "$MASTER_PROJECT_REF" ]; then
+    echo -e "${GREEN}Setting client service key in master database for sync...${NC}"
+    CLIENT_SERVICE_KEY=$(supabase projects api-keys --project-ref ${PROJECT_REF} | grep 'service_role' | awk '{print $3}')
+    
+    if [ -n "$CLIENT_SERVICE_KEY" ]; then
+        SECRET_NAME="CLIENT_SERVICE_KEY_${PROJECT_REF}"
+        echo "Setting secret ${SECRET_NAME} in master project ${MASTER_PROJECT_REF}"
+        supabase secrets set ${SECRET_NAME}=${CLIENT_SERVICE_KEY} \
+            --project-ref ${MASTER_PROJECT_REF} 2>&1 | tee /tmp/set-sync-secret.log
+        
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✓ Client service key stored in master Edge Function secrets${NC}"
+            echo -e "${GREEN}  Secret name: ${SECRET_NAME}${NC}"
+        else
+            echo -e "${YELLOW}Warning: Failed to set client service key in master database${NC}"
+            echo -e "${YELLOW}  You may need to set this manually:${NC}"
+            echo -e "${YELLOW}  supabase secrets set ${SECRET_NAME}=${CLIENT_SERVICE_KEY} --project-ref ${MASTER_PROJECT_REF}${NC}"
+        fi
+    else
+        echo -e "${YELLOW}Warning: Could not retrieve client service key${NC}"
+        echo -e "${YELLOW}  Get it from: Supabase Dashboard → Settings → API → service_role key${NC}"
+        echo -e "${YELLOW}  Then set manually: supabase secrets set CLIENT_SERVICE_KEY_${PROJECT_REF}=<key> --project-ref ${MASTER_PROJECT_REF}${NC}"
+    fi
+else
+    echo -e "${YELLOW}Note: MASTER_PROJECT_REF not set, skipping sync secret setup${NC}"
+    echo -e "${YELLOW}  To enable content syncing, set MASTER_PROJECT_REF environment variable${NC}"
+    echo -e "${YELLOW}  Then manually set: supabase secrets set CLIENT_SERVICE_KEY_${PROJECT_REF}=<service_key> --project-ref <master_ref>${NC}"
+fi
 
 # Verify restore by comparing object counts with source database
 echo ""
@@ -899,6 +874,101 @@ fi
 echo ""
 echo "To add this client to an existing configuration, merge the JSON above."
 echo ""
+
+# Special instructions for master environment (requires new Vercel project)
+if [ "$CLIENT_NAME" = "master" ]; then
+    echo "=== VERCEL PROJECT SETUP FOR MASTER ==="
+    echo ""
+    echo "⚠️  Master requires a NEW Vercel project (separate from dev/staging/prod)"
+    echo ""
+    echo "Steps to create Vercel project for master:"
+    echo ""
+    echo "1. Go to Vercel Dashboard: https://vercel.com/dashboard"
+    echo ""
+    echo "2. Click 'Add New...' → 'Project'"
+    echo ""
+    echo "3. IMPORTANT: Select the correct repository"
+    echo "   • Repository Name: staysecure-learn"
+    echo "   • Repository Owner: kahuna-rayn (or your organization)"
+    echo "   • Verify: This should be the SAME repository used for dev/staging projects"
+    echo "   • If you don't see it, click 'Adjust GitHub App Permissions' and ensure"
+    echo "     the repository is accessible"
+    echo ""
+    echo "4. Configure project settings:"
+    echo "   • Project Name: master-staysecure-learn"
+    echo "     ⚠️  CRITICAL: Use exactly 'master-staysecure-learn' (no spaces, lowercase)"
+    echo "     This ensures consistency with dev/staging naming conventions"
+    echo ""
+    echo "   • Framework Preset: Vite (should auto-detect)"
+    echo "   • Root Directory: ./ (leave as default)"
+    echo "   • Build Command: npm run build (should auto-detect)"
+    echo "   • Output Directory: dist (should auto-detect)"
+    echo "   • Install Command: npm install (should auto-detect)"
+    echo ""
+    echo "   ⚠️  IMPORTANT: Configure Production Branch"
+    echo "   • After creating the project, go to Project Settings → Environments"
+    echo "   • Click on 'Production' environment"
+    echo "   • Under 'Branch Tracking' section, click the branch dropdown"
+    echo "   • Change from 'main' to '${ENVIRONMENT}' (dev or staging)"
+    echo "   • This ensures master deploys from the same branch as dev/staging"
+    echo "   • The text should read: 'Every commit pushed to the \`${ENVIRONMENT}\` branch"
+    echo "     will create a Production Deployment.'"
+    echo ""
+    echo "5. Add Environment Variables (BEFORE first deployment):"
+    echo "   Click 'Environment Variables' and add:"
+    echo ""
+    echo "   Variable: VITE_SUPABASE_URL"
+    echo "   Value: https://${PROJECT_REF}.supabase.co"
+    echo "   Environment: Production, Preview, Development (select all)"
+    echo ""
+    echo "   Variable: VITE_SUPABASE_ANON_KEY"
+    echo "   Value: ${ANON_KEY}"
+    echo "   Environment: Production, Preview, Development (select all)"
+    echo ""
+    echo "   Variable: VITE_CLIENT_CONFIGS"
+    echo "   Value: {\"default\":{\"clientId\":\"default\",\"supabaseUrl\":\"https://${PROJECT_REF}.supabase.co\",\"supabaseAnonKey\":\"${ANON_KEY}\",\"displayName\":\"Master\"}}"
+    echo "   Environment: Production, Preview, Development (select all)"
+    echo ""
+    echo "6. Click 'Deploy' to create and deploy the project"
+    echo ""
+    echo "7. After deployment, configure domain:"
+    echo "   • Go to Project Settings → Domains"
+    echo "   • Click 'Add' and enter: master.staysecure-learn.raynsecure.com"
+    echo "   • Follow DNS configuration instructions (add CNAME record)"
+    echo "   • Wait for DNS propagation (may take a few minutes)"
+    echo ""
+    echo "8. Verify deployment and branch configuration:"
+    echo "   • Check that project name is: master-staysecure-learn"
+    echo "   • Check that repository is: staysecure-learn"
+    echo "   • Check that domain is configured: master.staysecure-learn.raynsecure.com"
+    echo ""
+    echo "   ⚠️  CRITICAL: Verify Production Branch is Correct"
+    echo "   • Go to: Project Settings → Environments → Production"
+    echo "   • Under 'Branch Tracking', verify it shows: 'Every commit pushed to the \`${ENVIRONMENT}\` branch'"
+    echo "   • If it shows 'main' branch, change it to '${ENVIRONMENT}'"
+    echo ""
+    echo "   • Check current deployment branch:"
+    echo "     - Go to: Deployments tab"
+    echo "     - Click on the latest Production deployment"
+    echo "     - Look at 'Git Commit' section - it should show branch: '${ENVIRONMENT}'"
+    echo "     - The commit SHA should match a commit from the '${ENVIRONMENT}' branch"
+    echo ""
+    echo "   • To verify in Git:"
+    echo "     git log --oneline ${ENVIRONMENT} | head -5"
+    echo "     Compare the commit SHA with what Vercel shows"
+    echo ""
+    echo "   • If wrong branch is deployed:"
+    echo "     1. Fix branch in Settings → Environments → Production"
+    echo "     2. Trigger a new deployment by pushing to ${ENVIRONMENT} branch"
+    echo "     3. Or manually redeploy: Deployments → '...' menu → 'Redeploy'"
+    echo ""
+    echo "   • Test access at: https://master.staysecure-learn.raynsecure.com"
+    echo ""
+    echo "Note: Master uses the same codebase as dev/staging, just with different"
+    echo "      environment variables pointing to the master Supabase project."
+    echo ""
+fi
+
 echo "Next steps:"
 echo "  1. Configure Auth Settings in Supabase Dashboard:"
 echo "     • Go to: https://supabase.com/dashboard/project/${PROJECT_REF}/auth/url-configuration"
