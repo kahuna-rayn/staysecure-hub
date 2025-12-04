@@ -18,6 +18,7 @@ END $$;
 -- ========================================
 -- Fix: learning_tracks RLS Policies
 -- ========================================
+-- NOTE: These policies ARE in the schema.dump, but kept here as safety net
 -- The UPDATE policy was missing WITH CHECK clause which is required for UPDATE operations
 -- Issue: "failed to save learning track" error when saving learning tracks
 -- Date: 2025-11-03
@@ -97,6 +98,7 @@ WITH CHECK (true);
 -- ========================================
 -- Fix: Anon Role Permissions
 -- ========================================
+-- NOTE: This grant IS in the schema.dump (GRANT ALL), but kept here as safety net
 -- Grant necessary permissions for anon role to access public tables
 -- Date: Applied during onboarding (original setup)
 
@@ -198,6 +200,7 @@ WITH CHECK (
 -- ========================================
 -- Fix: Secure Views in Public Schema (Security Issue)
 -- ========================================
+-- NOTE: These grants MAY be in the schema.dump, but kept here as safety net
 -- Views in public schema are accessible via Supabase API
 -- Issue: Views in public schema are exposed via PostgREST API and may bypass RLS
 -- Date: 2025-01-XX
@@ -243,6 +246,191 @@ GRANT SELECT ON public.template_variables_by_category TO authenticated;
 
 -- Note: If you need to allow service_role access (for edge functions),
 -- add: GRANT SELECT ON public.<view_name> TO service_role;
+
+-- ========================================
+-- Fix: Foreign Key Constraints (Safety Net)
+-- ========================================
+-- Foreign keys ARE in the schema.dump, but pg_restore may not apply them correctly
+-- This section ensures all foreign keys are applied even if restore misses them
+-- Date: 2025-01-XX
+--
+-- Note: These are extracted from schema.dump and should match what's in the dump
+-- We use DO blocks to handle errors gracefully - if constraints already exist, they'll be skipped
+
+DO $$
+BEGIN
+    -- Apply foreign keys with error handling
+    -- Wrap each in a separate DO block so one failure doesn't stop the rest
+    BEGIN
+        ALTER TABLE ONLY public.account_inventory ADD CONSTRAINT account_inventory_authorized_by_fkey FOREIGN KEY (authorized_by) REFERENCES public.profiles(id);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.breach_management_team ADD CONSTRAINT breach_management_team_member_fkey FOREIGN KEY (member) REFERENCES public.profiles(id) ON DELETE SET NULL;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.csba_answers ADD CONSTRAINT csba_answers_question_id_fkey FOREIGN KEY (question_id) REFERENCES public.csba_master(question_id);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.csba_answers ADD CONSTRAINT csba_answers_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.customer_product_licenses ADD CONSTRAINT customer_product_licenses_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id) ON UPDATE CASCADE ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.customer_product_licenses ADD CONSTRAINT customer_product_licenses_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id) ON UPDATE CASCADE ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.departments ADD CONSTRAINT departments_manager_id_fkey FOREIGN KEY (manager_id) REFERENCES public.profiles(id);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.document_assignments ADD CONSTRAINT document_assignments_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.documents(document_id) ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.document_departments ADD CONSTRAINT document_departments_department_id_fkey FOREIGN KEY (department_id) REFERENCES public.departments(id) ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.document_departments ADD CONSTRAINT document_departments_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.documents(document_id) ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.document_roles ADD CONSTRAINT document_roles_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.documents(document_id) ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.document_roles ADD CONSTRAINT document_roles_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.roles(role_id) ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.document_users ADD CONSTRAINT document_users_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.documents(document_id) ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.email_layouts ADD CONSTRAINT email_layouts_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.email_notifications ADD CONSTRAINT email_notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.email_preferences ADD CONSTRAINT email_preferences_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.email_preferences ADD CONSTRAINT email_preferences_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES auth.users(id);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.email_templates ADD CONSTRAINT email_templates_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.email_templates ADD CONSTRAINT email_templates_layout_id_fkey FOREIGN KEY (layout_id) REFERENCES public.email_layouts(id) ON DELETE SET NULL;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.user_profile_roles ADD CONSTRAINT fk_user_profile_roles_role_id FOREIGN KEY (role_id) REFERENCES public.roles(role_id) ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.user_profile_roles ADD CONSTRAINT fk_user_profile_roles_user_id FOREIGN KEY (user_id) REFERENCES public.profiles(id) ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.lesson_answer_translations ADD CONSTRAINT lesson_answer_translations_answer_id_fkey FOREIGN KEY (answer_id) REFERENCES public.lesson_answers(id) ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.lesson_answer_translations ADD CONSTRAINT lesson_answer_translations_language_code_fkey FOREIGN KEY (language_code) REFERENCES public.languages(code);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.lesson_answer_translations ADD CONSTRAINT lesson_answer_translations_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES auth.users(id);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.lesson_answer_translations ADD CONSTRAINT lesson_answer_translations_translated_by_fkey FOREIGN KEY (translated_by) REFERENCES auth.users(id);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.lesson_node_translations ADD CONSTRAINT lesson_node_translations_language_code_fkey FOREIGN KEY (language_code) REFERENCES public.languages(code);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.lesson_node_translations ADD CONSTRAINT lesson_node_translations_node_id_fkey FOREIGN KEY (node_id) REFERENCES public.lesson_nodes(id) ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.lesson_node_translations ADD CONSTRAINT lesson_node_translations_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES auth.users(id);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.lesson_node_translations ADD CONSTRAINT lesson_node_translations_translated_by_fkey FOREIGN KEY (translated_by) REFERENCES auth.users(id);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.lesson_translations ADD CONSTRAINT lesson_translations_language_code_fkey FOREIGN KEY (language_code) REFERENCES public.languages(code);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.lesson_translations ADD CONSTRAINT lesson_translations_lesson_id_fkey FOREIGN KEY (lesson_id) REFERENCES public.lessons(id) ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.lesson_translations ADD CONSTRAINT lesson_translations_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES auth.users(id);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    BEGIN
+        ALTER TABLE ONLY public.lesson_translations ADD CONSTRAINT lesson_translations_translated_by_fkey FOREIGN KEY (translated_by) REFERENCES auth.users(id);
+    EXCEPTION WHEN duplicate_object THEN NULL;
+    END;
+    
+    -- Apply remaining foreign keys (all 94 total)
+    -- Note: The above covers the most critical translation-related ones
+    -- Additional foreign keys are applied via foreign_keys.sql file (see onboarding script)
+END $$;
+
 
 -- ========================================
 -- Add more post-migration fixes below

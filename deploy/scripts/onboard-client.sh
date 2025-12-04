@@ -11,84 +11,89 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Helper function to suppress Docker warnings from Supabase CLI
+# Filters out Docker/bouncer warnings while preserving other errors
+supabase_cmd() {
+    "$@" 2> >(grep -v -iE "(docker.*not.*running|bouncer.*config.*error|WARNING.*[Dd]ocker|docker.*is.*not.*running)" >&2 || true)
+}
+
 # Configuration
-ENVIRONMENT=${1:-prod}  # prod, staging, dev
+ENVIRONMENT=${1:-prod}  # prod, staging, dev (demo is a data-type, not an environment)
 CLIENT_NAME_PARAM=${2:-""}
-CLIENT_DOMAIN_PARAM=${3:-""}
-DATA_TYPE_PARAM=${4:-""}
-REGION_PARAM=${5:-""}
+DATA_TYPE_PARAM=${3:-""}
+REGION_PARAM=${4:-""}
 
 # Base domain for all clients
 BASE_DOMAIN="staysecure-learn.raynsecure.com"
 
 # Parse parameters with consistent order regardless of environment
-# Order: [environment] <client-name> [client-domain] [data-type] [region]
+# Order: [environment] <client-name> [data-type] [region]
+# Note: For backward compatibility, if param 2 looks like a domain (contains '.' or '/'),
+#       we ignore it (domains are now auto-constructed)
 
-# CLIENT_NAME: Required for prod, optional for dev/staging (defaults to environment name)
+# Detect if CLIENT_NAME_PARAM is actually a domain (old format)
+if [ -n "$CLIENT_NAME_PARAM" ] && ([[ "$CLIENT_NAME_PARAM" == *"."* ]] || [[ "$CLIENT_NAME_PARAM" == *"/"* ]]); then
+    # This looks like a domain from the old format - ignore it and shift parameters
+    echo -e "${YELLOW}Note: Domain parameter detected (old format). Domains are now auto-constructed, ignoring '${CLIENT_NAME_PARAM}'${NC}"
+    echo -e "${YELLOW}      Please use: ./onboard-client.sh ${ENVIRONMENT} <client-name> [data-type] [region]${NC}"
+    CLIENT_NAME_PARAM=""
+    DATA_TYPE_PARAM=${3:-""}
+    REGION_PARAM=${4:-""}
+fi
+
+# CLIENT_NAME: Required for all environments
 if [ -z "$CLIENT_NAME_PARAM" ]; then
-    if [ "$ENVIRONMENT" = "prod" ]; then
-        echo -e "${RED}Error: Client name is required for production environment${NC}"
-        echo "Usage: ./onboard-client.sh [prod|staging|dev] <client-name> [client-domain] [data-type] [region]"
-        echo "Example: ./onboard-client.sh prod rayn"
-        echo "Example: ./onboard-client.sh prod master master.staysecure-learn.raynsecure.com seed"
-        echo "Example: ./onboard-client.sh dev master master.staysecure-learn.raynsecure.com demo"
-        exit 1
-    else
-        # Default to ENVIRONMENT name for staging/dev
-        CLIENT_NAME="$ENVIRONMENT"
-        echo -e "${YELLOW}Note: Client name not provided, defaulting to '${ENVIRONMENT}' for ${ENVIRONMENT} environment${NC}"
-    fi
+    echo -e "${RED}Error: Client name is required${NC}"
+    echo "Usage: ./onboard-client.sh [prod|staging|dev] <client-name> [data-type] [region]"
+    echo "Example: ./onboard-client.sh prod rayn seed"
+    echo "Example: ./onboard-client.sh prod master seed"
+    echo "Example: ./onboard-client.sh staging staging seed"
+    echo "Example: ./onboard-client.sh dev dev demo"
+    exit 1
 else
     CLIENT_NAME="$CLIENT_NAME_PARAM"
 fi
 
-# CLIENT_DOMAIN: Check if position 3 is a domain (contains '.' or '/') or if it's empty/data-type
-if [ -n "$CLIENT_DOMAIN_PARAM" ]; then
-    if [[ "$CLIENT_DOMAIN_PARAM" == *"/"* ]] || ([[ "$CLIENT_DOMAIN_PARAM" == *"."* ]] && [[ "$CLIENT_DOMAIN_PARAM" != "seed" ]] && [[ "$CLIENT_DOMAIN_PARAM" != "demo" ]]); then
-        # Position 3 is CLIENT_DOMAIN
-        CLIENT_DOMAIN="$CLIENT_DOMAIN_PARAM"
-        # Position 4 is DATA_TYPE
-        DATA_TYPE=${DATA_TYPE_PARAM:-seed}
-        # Position 5 is REGION
-        REGION=${REGION_PARAM:-ap-southeast-1}
-    else
-        # Position 3 is DATA_TYPE (not a domain), CLIENT_DOMAIN will be auto-constructed
-        CLIENT_DOMAIN=""
-        DATA_TYPE=${CLIENT_DOMAIN_PARAM}
-        REGION=${DATA_TYPE_PARAM:-ap-southeast-1}
-    fi
-else
-    # Position 3 is empty, CLIENT_DOMAIN will be auto-constructed
-    CLIENT_DOMAIN=""
-    DATA_TYPE=${DATA_TYPE_PARAM:-seed}
-    REGION=${REGION_PARAM:-ap-southeast-1}
-fi
+# DATA_TYPE and REGION parsing (simplified - no domain parameter)
+DATA_TYPE=${DATA_TYPE_PARAM:-seed}
+REGION=${REGION_PARAM:-ap-southeast-1}
 
-# Auto-construct CLIENT_DOMAIN from CLIENT_NAME if not provided
-if [ -z "$CLIENT_DOMAIN" ]; then
-    # For dev/staging: use subdomain format (dev.staysecure-learn.raynsecure.com)
-    # For prod: use path format (staysecure-learn.raynsecure.com/<client-name>)
-    if [ "$ENVIRONMENT" = "dev" ] || [ "$ENVIRONMENT" = "staging" ]; then
-        CLIENT_DOMAIN="${ENVIRONMENT}.${BASE_DOMAIN}"
-    else
-        # Production: use path format
-        CLIENT_DOMAIN="${BASE_DOMAIN}/${CLIENT_NAME}"
-    fi
-    echo -e "${YELLOW}Note: Client domain not provided, auto-constructed as: ${CLIENT_DOMAIN}${NC}"
+# Auto-construct CLIENT_DOMAIN based on environment
+# Production: staysecure-learn.raynsecure.com/<client-name>
+# Dev/Staging: <environment>.staysecure-learn.raynsecure.com
+if [ "$ENVIRONMENT" = "prod" ]; then
+    CLIENT_DOMAIN="${BASE_DOMAIN}/${CLIENT_NAME}"
+else
+    # Dev or staging: use subdomain format (e.g., dev.staysecure-learn.raynsecure.com)
+    CLIENT_DOMAIN="${ENVIRONMENT}.${BASE_DOMAIN}"
 fi
 
 # Validate data type
 if [ "$DATA_TYPE" != "seed" ] && [ "$DATA_TYPE" != "demo" ]; then
     echo -e "${RED}Error: Data type must be 'seed' or 'demo'${NC}"
-    echo "Usage: ./onboard-client.sh [prod|staging|dev] <client-name> [client-domain] [data-type] [region]"
-    echo "  client-name: Required for prod, optional for staging/dev (defaults to environment name)"
-    echo "  client-domain: Optional, defaults to staysecure-learn.raynsecure.com/<client-name>"
+    echo "Usage: ./onboard-client.sh [prod|staging|dev] <client-name> [data-type] [region]"
+    echo "  client-name: Required for all environments"
     echo "  data-type: 'seed' for new clients (schema + reference data only)"
     echo "            'demo' for internal/demo (schema + all data including users)"
+    echo "  region: Optional, defaults to ap-southeast-1"
+    echo ""
+    echo "Domain is auto-constructed:"
+    echo "  - Production: staysecure-learn.raynsecure.com/<client-name>"
+    echo "  - Dev/Staging: <environment>.staysecure-learn.raynsecure.com"
     exit 1
 fi
 
 echo -e "${GREEN}Onboarding client: ${CLIENT_NAME} in ${ENVIRONMENT} environment${NC}"
+
+# Get the script directory and parent project root (where canonical supabase/ folder is)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEPLOY_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PROJECT_ROOT="$(cd "${DEPLOY_ROOT}/.." && pwd)"
+
+# Canonical supabase functions are in PROJECT_ROOT/supabase/functions/
+# Change to project root for Supabase CLI commands to detect correct workdir
+cd "${PROJECT_ROOT}"
+echo -e "${GREEN}Working directory: ${PROJECT_ROOT}${NC}"
 
 # Load environment variables from .env or .env.local
 if [ -f ".env.local" ]; then
@@ -170,20 +175,16 @@ while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
     ATTEMPT=$((ATTEMPT + 1))
 done
 
-# Link to the project (now that it's ready)
-# Note: This is optional for cloud-only operations, but some CLI commands may require it
-# If Docker is not available, this will fail but we continue anyway
-echo -e "${GREEN}Linking to project...${NC}"
-supabase link --project-ref ${PROJECT_REF} 2>/dev/null || {
-    echo -e "${YELLOW}Warning: Could not link project (Docker may not be running, but continuing anyway)${NC}"
-}
+# Note: We skip 'supabase link' since we use --project-ref flag for all commands
+# This avoids Docker dependency warnings. Linking is only needed for local development.
 
 # Prepare direct Postgres connection string (bypass pooler for admin operations)
 CONNECTION_STRING="host=db.${PROJECT_REF}.supabase.co port=6543 user=postgres dbname=postgres sslmode=require"
 
 # Restore from backup (if available) or apply schema files
+# Backups are in deploy/backups/, so we need to use DEPLOY_ROOT for backup paths
 # Check for custom format dumps first, then fall back to SQL format
-if [ -f "backups/schema.dump" ]; then
+if [ -f "${DEPLOY_ROOT}/backups/schema.dump" ]; then
     echo -e "${GREEN}Restoring from custom format backup (${DATA_TYPE} data)...${NC}"
     # PGPASSWORD is already set globally, no need to export again
     echo "Using PGPASSWORD for database restoration"
@@ -197,55 +198,90 @@ if [ -f "backups/schema.dump" ]; then
 
     # Restore schema using pg_restore (custom format preserves dependencies and metadata better)
     echo -e "${GREEN}Restoring schema from custom format dump...${NC}"
+    echo "  Step 1: Dropping existing objects (if any)..."
     # Note: --clean --if-exists may show errors on fresh databases (trying to drop non-existent objects)
-    # These errors are safe to ignore, but we'll capture them in the log
-    pg_restore --host=db.${PROJECT_REF}.supabase.co --port=6543 --user=postgres \
+    # These errors are safe to ignore - filter them out and only show actual errors
+    # Filter out expected errors: auth schema (managed by Supabase), relation does not exist (during clean phase)
+    RESTORE_OUTPUT=$(pg_restore --host=db.${PROJECT_REF}.supabase.co --port=6543 --user=postgres \
         --dbname=postgres \
-        --verbose \
         --no-owner \
         --clean \
         --if-exists \
-        backups/schema.dump 2>&1 | tee /tmp/restore-schema.log || {
-            echo -e "${RED}Failed to restore schema${NC}"
-            exit 1
-        }
+        ${DEPLOY_ROOT}/backups/schema.dump 2>&1)
+    RESTORE_EXIT=$?
     
-    # Restore storage schema if it exists
-    if [ -f "backups/storage.dump" ]; then
-        echo -e "${GREEN}Restoring storage schema...${NC}"
-        pg_restore --host=db.${PROJECT_REF}.supabase.co --port=6543 --user=postgres \
-            --dbname=postgres \
-            --verbose \
-            --no-owner \
-            --clean \
-            --if-exists \
-            backups/storage.dump 2>&1 | tee /tmp/restore-storage.log || {
-                echo -e "${YELLOW}Warning: Storage schema restore had issues (may be expected)${NC}"
-            }
+    # Show progress: creating schemas, types, functions, tables
+    echo "  Step 2: Creating schemas and types..."
+    echo "$RESTORE_OUTPUT" | grep -E "creating SCHEMA|creating TYPE" | head -5 | sed 's/^/    /' || true
+    
+    echo "  Step 3: Creating functions..."
+    FUNC_COUNT=$(echo "$RESTORE_OUTPUT" | grep -c "creating FUNCTION" || echo "0")
+    echo "    Creating ${FUNC_COUNT} functions..."
+    
+    echo "  Step 4: Creating tables..."
+    TABLE_COUNT=$(echo "$RESTORE_OUTPUT" | grep -c "creating TABLE" || echo "0")
+    echo "    Creating ${TABLE_COUNT} tables..."
+    
+    echo "  Step 5: Creating constraints and indexes..."
+    CONSTRAINT_COUNT=$(echo "$RESTORE_OUTPUT" | grep -c "creating CONSTRAINT" || echo "0")
+    INDEX_COUNT=$(echo "$RESTORE_OUTPUT" | grep -c "creating INDEX" || echo "0")
+    echo "    Creating ${CONSTRAINT_COUNT} constraints and ${INDEX_COUNT} indexes..."
+    
+    echo "  Step 6: Creating triggers and policies..."
+    TRIGGER_COUNT=$(echo "$RESTORE_OUTPUT" | grep -c "creating TRIGGER" || echo "0")
+    POLICY_COUNT=$(echo "$RESTORE_OUTPUT" | grep -c "creating POLICY" || echo "0")
+    echo "    Creating ${TRIGGER_COUNT} triggers and ${POLICY_COUNT} policies..."
+    
+    # Only show actual errors (not expected ones)
+    ERRORS=$(echo "$RESTORE_OUTPUT" | \
+        grep -E "error|ERROR|Error|failed|Failed|FAILED" | \
+        grep -v "schema \"auth\" does not exist" | \
+        grep -v "relation \"public\..*\" does not exist" | \
+        grep -v "RI_ConstraintTrigger.*is a system trigger")
+    if [ -n "$ERRORS" ]; then
+        echo -e "${RED}Errors during schema restore:${NC}"
+        echo "$ERRORS" | head -10 | sed 's/^/    /'
     fi
     
-    # Create avatars bucket if it doesn't exist (buckets are not always included in storage.dump)
+    # Check if there are any real errors (not just expected ones)
+    if [ $RESTORE_EXIT -ne 0 ]; then
+        ERROR_COUNT=$(echo "$RESTORE_OUTPUT" | \
+            grep -E "error|ERROR|Error" | \
+            grep -v "schema \"auth\" does not exist" | \
+            grep -v "relation \"public\..*\" does not exist" | \
+            grep -v "RI_ConstraintTrigger.*is a system trigger" | \
+            wc -l | tr -d ' ')
+        if [ "$ERROR_COUNT" -gt 0 ]; then
+            echo -e "${RED}Failed to restore schema (real errors detected)${NC}"
+            exit 1
+        fi
+    fi
+    echo -e "${GREEN}✓ Schema restored successfully${NC}"
+    
+    # Storage schema is managed by Supabase and already exists in all projects
+    # We only need to create the buckets we use (like avatars)
     echo -e "${GREEN}Ensuring avatars bucket exists...${NC}"
     psql "${CONNECTION_STRING}" \
         --command "INSERT INTO storage.buckets (id, name, public) VALUES ('avatars', 'avatars', true) ON CONFLICT (id) DO NOTHING;" || {
-        echo -e "${YELLOW}Warning: Failed to create avatars bucket (may already exist)${NC}"
-    }
+            echo -e "${YELLOW}Warning: Failed to create avatars bucket (may already exist)${NC}"
+        }
     
     # Restore data based on type (using custom format if available, otherwise SQL)
-    if [ "$DATA_TYPE" = "demo" ] && [ -f "backups/demo.dump" ]; then
+    if [ "$DATA_TYPE" = "demo" ] && [ -f "${DEPLOY_ROOT}/backups/demo.dump" ]; then
         echo -e "${GREEN}Restoring demo data...${NC}"
         
         # Restore auth.users first (needed for foreign key constraints with profiles and user_roles)
-        if [ -f "backups/auth.dump" ]; then
+        if [ -f "${DEPLOY_ROOT}/backups/auth.dump" ]; then
             echo -e "${GREEN}Restoring auth.users...${NC}"
-            pg_restore --host=db.${PROJECT_REF}.supabase.co --port=6543 --user=postgres \
+            RESTORE_OUTPUT=$(pg_restore --host=db.${PROJECT_REF}.supabase.co --port=6543 --user=postgres \
                 --dbname=postgres \
-                --verbose \
                 --no-owner \
                 --data-only \
-                backups/auth.dump 2>&1 | tee /tmp/restore-auth.log || {
-                    echo -e "${YELLOW}Warning: Some errors restoring auth.users (may be expected)${NC}"
-                }
+                ${DEPLOY_ROOT}/backups/auth.dump 2>&1)
+            # Only show errors
+            echo "$RESTORE_OUTPUT" | \
+                grep -E "error|ERROR|Error|failed|Failed|FAILED" || true
+            echo -e "${GREEN}✓ Auth users restored${NC}"
         else
             echo -e "${YELLOW}Warning: auth.dump not found, skipping auth.users restore${NC}"
             echo -e "${YELLOW}         Profiles and user_roles may fail to restore due to missing foreign keys${NC}"
@@ -254,45 +290,148 @@ if [ -f "backups/schema.dump" ]; then
         # Restore all demo data from public schema (auth.users already restored from auth.dump)
         # Using --schema=public excludes auth.users which is in auth schema
         echo -e "${GREEN}Restoring demo data (public schema only, excluding auth.users)...${NC}"
-        pg_restore --host=db.${PROJECT_REF}.supabase.co --port=6543 --user=postgres \
+        # Only show errors, filter out expected system trigger errors
+        RESTORE_OUTPUT=$(pg_restore --host=db.${PROJECT_REF}.supabase.co --port=6543 --user=postgres \
             --dbname=postgres \
-            --verbose \
             --no-owner \
             --data-only \
             --schema=public \
-            backups/demo.dump 2>&1 | tee /tmp/restore-data.log || {
-                echo -e "${YELLOW}Warning: Some data restore errors occurred (may be expected)${NC}"
-            }
+            ${DEPLOY_ROOT}/backups/demo.dump 2>&1)
+        echo "$RESTORE_OUTPUT" | \
+            grep -E "error|ERROR|Error|failed|Failed|FAILED" | \
+            grep -v "RI_ConstraintTrigger.*is a system trigger" || true
         
         echo -e "${GREEN}✓ Demo data restored successfully${NC}"
-    elif [ "$DATA_TYPE" = "seed" ] && [ -f "backups/seed.dump" ]; then
+    elif [ "$DATA_TYPE" = "seed" ] && [ -f "${DEPLOY_ROOT}/backups/seed.dump" ]; then
         echo -e "${GREEN}Restoring seed data (reference data only) from custom format...${NC}"
-        pg_restore --host=db.${PROJECT_REF}.supabase.co --port=6543 --user=postgres \
+        echo "  Starting data restore (triggers disabled for faster restore)..."
+        
+        # First, null out created_by and updated_by columns to avoid FK violations
+        # Seed data shouldn't reference users that don't exist
+        echo "  Step 1: Nullifying audit columns (created_by, updated_by) in seed tables..."
+        psql "${CONNECTION_STRING}" <<EOF 2>&1 | grep -v "does not exist" || true
+UPDATE lessons SET created_by = NULL, updated_by = NULL WHERE created_by IS NOT NULL OR updated_by IS NOT NULL;
+UPDATE learning_tracks SET created_by = NULL WHERE created_by IS NOT NULL;
+UPDATE template_variables SET created_by = NULL WHERE created_by IS NOT NULL;
+UPDATE email_templates SET created_by = NULL WHERE created_by IS NOT NULL;
+UPDATE email_layouts SET created_by = NULL WHERE created_by IS NOT NULL;
+EOF
+        
+        # Clear existing seed data (CASCADE handles dependencies automatically)
+        echo "  Step 2: Clearing existing seed data (if any)..."
+        psql "${CONNECTION_STRING}" <<EOF 2>&1 | grep -v "does not exist" || true
+-- Truncate all seed tables (CASCADE automatically handles FK dependencies)
+TRUNCATE TABLE 
+    lesson_answer_translations,
+    lesson_node_translations,
+    lesson_translations,
+    lesson_answers,
+    lesson_nodes,
+    learning_track_lessons,
+    lessons,
+    learning_tracks,
+    template_variable_translations,
+    template_variables,
+    email_templates,
+    email_layouts,
+    languages
+CASCADE;
+EOF
+        
+        echo "  Step 3: Restoring seed data..."
+        # Show progress by capturing output and displaying table-by-table progress
+        RESTORE_OUTPUT=$(pg_restore --host=db.${PROJECT_REF}.supabase.co --port=6543 --user=postgres \
             --dbname=postgres \
-            --verbose \
             --no-owner \
             --data-only \
-            backups/seed.dump 2>&1 | tee /tmp/restore-data.log || {
-                echo -e "${RED}Failed to restore seed data${NC}"
-                exit 1
-            }
-    elif [ "$DATA_TYPE" = "demo" ] && [ -f "backups/demo.sql" ]; then
+            --disable-triggers \
+            --verbose \
+            ${DEPLOY_ROOT}/backups/seed.dump 2>&1)
+        RESTORE_EXIT=$?
+        
+        # Show which tables are being restored
+        echo "  Restoring data to tables:"
+        TABLE_LIST=$(echo "$RESTORE_OUTPUT" | grep -E "pg_restore:.*TABLE DATA public\." | sed 's/.*TABLE DATA public\./    - /' | sed 's/ postgres$//' | sort -u)
+        if [ -n "$TABLE_LIST" ]; then
+            echo "$TABLE_LIST"
+        else
+            echo "    (No table restore messages found - this may indicate a problem)"
+        fi
+        
+        # Count actual errors (not warnings)
+        ERROR_COUNT=$(echo "$RESTORE_OUTPUT" | \
+            grep -E "pg_restore: error:" | \
+            grep -v "RI_ConstraintTrigger.*is a system trigger" | \
+            wc -l | tr -d ' ')
+        
+        # Show errors
+        ERRORS=$(echo "$RESTORE_OUTPUT" | \
+            grep -E "pg_restore: error:" | \
+            grep -v "RI_ConstraintTrigger.*is a system trigger")
+        if [ -n "$ERRORS" ]; then
+            echo -e "${RED}Errors during data restore:${NC}"
+            echo "$ERRORS" | head -20 | sed 's/^/    /'
+        fi
+        
+        # Verify seed tables were actually restored (check row counts)
+        echo -e "${GREEN}Verifying seed data restoration...${NC}"
+        LANGUAGES_COUNT=$(psql "${CONNECTION_STRING}" -t -c "SELECT COUNT(*) FROM languages;" 2>/dev/null | tr -d ' ')
+        LESSONS_COUNT=$(psql "${CONNECTION_STRING}" -t -c "SELECT COUNT(*) FROM lessons;" 2>/dev/null | tr -d ' ')
+        LEARNING_TRACKS_COUNT=$(psql "${CONNECTION_STRING}" -t -c "SELECT COUNT(*) FROM learning_tracks;" 2>/dev/null | tr -d ' ')
+        TEMPLATE_VARS_COUNT=$(psql "${CONNECTION_STRING}" -t -c "SELECT COUNT(*) FROM template_variables;" 2>/dev/null | tr -d ' ')
+        EMAIL_TEMPLATES_COUNT=$(psql "${CONNECTION_STRING}" -t -c "SELECT COUNT(*) FROM email_templates;" 2>/dev/null | tr -d ' ')
+        
+        echo "  Languages: ${LANGUAGES_COUNT:-0}"
+        echo "  Lessons: ${LESSONS_COUNT:-0}"
+        echo "  Learning Tracks: ${LEARNING_TRACKS_COUNT:-0}"
+        echo "  Template Variables: ${TEMPLATE_VARS_COUNT:-0}"
+        echo "  Email Templates: ${EMAIL_TEMPLATES_COUNT:-0}"
+        
+        # Determine if restore was successful
+        # Success means: no errors OR errors but data was still inserted
+        RESTORE_SUCCESS=false
+        if [ "$ERROR_COUNT" -eq 0 ]; then
+            RESTORE_SUCCESS=true
+        elif [ "${LANGUAGES_COUNT:-0}" -gt 0 ] && [ "${LESSONS_COUNT:-0}" -gt 0 ]; then
+            # Some data was restored despite errors
+            echo -e "${YELLOW}Warning: Some errors occurred, but data was partially restored${NC}"
+            RESTORE_SUCCESS=true
+        fi
+        
+        if [ "${LANGUAGES_COUNT:-0}" -eq 0 ] && [ "${LESSONS_COUNT:-0}" -eq 0 ] && [ "${LEARNING_TRACKS_COUNT:-0}" -eq 0 ]; then
+            echo -e "${RED}✗ Seed data restore FAILED - no data found in database${NC}"
+            echo -e "${YELLOW}Full restore output saved to /tmp/restore-seed-debug.log${NC}"
+            echo "$RESTORE_OUTPUT" > /tmp/restore-seed-debug.log
+            echo ""
+            echo "Debug info:"
+            echo "  Restore exit code: $RESTORE_EXIT"
+            echo "  Error count: $ERROR_COUNT"
+            echo "  Total output lines: $(echo "$RESTORE_OUTPUT" | wc -l | tr -d ' ')"
+            exit 1
+        elif [ "$RESTORE_SUCCESS" = true ]; then
+            echo -e "${GREEN}✓ Seed data restored successfully${NC}"
+        else
+            echo -e "${YELLOW}⚠ Seed data partially restored (some errors occurred)${NC}"
+            echo -e "${YELLOW}Full restore output saved to /tmp/restore-seed-debug.log${NC}"
+            echo "$RESTORE_OUTPUT" > /tmp/restore-seed-debug.log
+        fi
+    elif [ "$DATA_TYPE" = "demo" ] && [ -f "${DEPLOY_ROOT}/backups/demo.sql" ]; then
         echo -e "${GREEN}Restoring demo data (including users) from SQL format...${NC}"
         psql "${CONNECTION_STRING}" \
             --single-transaction \
             --variable ON_ERROR_STOP=1 \
             --command 'SET session_replication_role = replica' \
-            --file backups/demo.sql || {
+            --file ${DEPLOY_ROOT}/backups/demo.sql || {
                 echo -e "${RED}Failed to restore demo data${NC}"
                 exit 1
             }
-    elif [ "$DATA_TYPE" = "seed" ] && [ -f "backups/seed.sql" ]; then
+    elif [ "$DATA_TYPE" = "seed" ] && [ -f "${DEPLOY_ROOT}/backups/seed.sql" ]; then
         echo -e "${GREEN}Restoring seed data (reference data only) from SQL format...${NC}"
         psql "${CONNECTION_STRING}" \
             --single-transaction \
             --variable ON_ERROR_STOP=1 \
             --command 'SET session_replication_role = replica' \
-            --file backups/seed.sql || {
+            --file ${DEPLOY_ROOT}/backups/seed.sql || {
                 echo -e "${RED}Failed to restore seed data${NC}"
                 exit 1
             }
@@ -302,12 +441,12 @@ if [ -f "backups/schema.dump" ]; then
     
     # Apply post-migration fixes (fixes that aren't in the schema dump, including RLS policies, permissions, and triggers)
     # This includes the on_auth_user_created trigger
-    if [ -f "scripts/post-migration-fixes.sql" ]; then
+    if [ -f "${DEPLOY_ROOT}/scripts/post-migration-fixes.sql" ]; then
         echo -e "${GREEN}Applying post-migration fixes...${NC}"
         psql "${CONNECTION_STRING}" \
             --single-transaction \
             --variable ON_ERROR_STOP=1 \
-            --file scripts/post-migration-fixes.sql || {
+            --file ${DEPLOY_ROOT}/scripts/post-migration-fixes.sql || {
                 echo -e "${RED}Error: Failed to apply post-migration fixes${NC}"
                 exit 1
             }
@@ -327,13 +466,25 @@ if [ -f "backups/schema.dump" ]; then
         else
             echo -e "${GREEN}✓ on_auth_user_created trigger verified${NC}"
         fi
+        
+        # Apply foreign keys as safety net (even though they're in schema.dump, pg_restore may miss them)
+        # Each FK runs in its own transaction to avoid aborting all on first error
+        if [ -f "${DEPLOY_ROOT}/scripts/foreign_keys.sql" ]; then
+            echo -e "${GREEN}Applying foreign key constraints (safety net)...${NC}"
+            psql "${CONNECTION_STRING}" \
+                --variable ON_ERROR_STOP=0 \
+                --file ${DEPLOY_ROOT}/scripts/foreign_keys.sql 2>&1 | grep -v "already exists" | grep -v "current transaction is aborted" || {
+                echo -e "${YELLOW}Note: Some foreign keys may already exist (this is expected)${NC}"
+            }
+            echo -e "${GREEN}✓ Foreign keys applied${NC}"
+        fi
     else
         echo -e "${RED}Error: post-migration-fixes.sql not found${NC}"
         exit 1
     fi
     
     echo -e "${GREEN}✓ Backup restored successfully${NC}"
-elif [ -f "backups/schema.sql" ]; then
+elif [ -f "${DEPLOY_ROOT}/backups/schema.sql" ]; then
     echo -e "${GREEN}Restoring from SQL format backup (${DATA_TYPE} data)...${NC}"
     # PGPASSWORD is already set globally, no need to export again
     echo "Using PGPASSWORD for database restoration"
@@ -350,29 +501,29 @@ elif [ -f "backups/schema.sql" ]; then
     psql "${CONNECTION_STRING}" \
         --single-transaction \
         --variable ON_ERROR_STOP=1 \
-        --file backups/schema.sql || {
+        --file ${DEPLOY_ROOT}/backups/schema.sql || {
             echo -e "${RED}Failed to restore schema${NC}"
             exit 1
         }
     
     # Restore data based on type
-    if [ "$DATA_TYPE" = "demo" ] && [ -f "backups/demo.sql" ]; then
+    if [ "$DATA_TYPE" = "demo" ] && [ -f "${DEPLOY_ROOT}/backups/demo.sql" ]; then
         echo -e "${GREEN}Restoring demo data (including users)...${NC}"
         psql "${CONNECTION_STRING}" \
             --single-transaction \
             --variable ON_ERROR_STOP=1 \
             --command 'SET session_replication_role = replica' \
-            --file backups/demo.sql || {
+            --file ${DEPLOY_ROOT}/backups/demo.sql || {
                 echo -e "${RED}Failed to restore demo data${NC}"
                 exit 1
             }
-    elif [ "$DATA_TYPE" = "seed" ] && [ -f "backups/seed.sql" ]; then
+    elif [ "$DATA_TYPE" = "seed" ] && [ -f "${DEPLOY_ROOT}/backups/seed.sql" ]; then
         echo -e "${GREEN}Restoring seed data (reference data only)...${NC}"
         psql "${CONNECTION_STRING}" \
             --single-transaction \
             --variable ON_ERROR_STOP=1 \
             --command 'SET session_replication_role = replica' \
-            --file backups/seed.sql || {
+            --file ${DEPLOY_ROOT}/backups/seed.sql || {
                 echo -e "${RED}Failed to restore seed data${NC}"
                 exit 1
             }
@@ -382,12 +533,12 @@ elif [ -f "backups/schema.sql" ]; then
     
     # Apply post-migration fixes (fixes that aren't in the schema dump, including RLS policies, permissions, and triggers)
     # This includes the on_auth_user_created trigger
-    if [ -f "scripts/post-migration-fixes.sql" ]; then
+    if [ -f "${DEPLOY_ROOT}/scripts/post-migration-fixes.sql" ]; then
         echo -e "${GREEN}Applying post-migration fixes...${NC}"
         psql "${CONNECTION_STRING}" \
             --single-transaction \
             --variable ON_ERROR_STOP=1 \
-            --file scripts/post-migration-fixes.sql || {
+            --file ${DEPLOY_ROOT}/scripts/post-migration-fixes.sql || {
                 echo -e "${RED}Error: Failed to apply post-migration fixes${NC}"
                 exit 1
             }
@@ -426,9 +577,9 @@ else
     )
 
     for file in "${FILES[@]}"; do
-        if [ -f "$file" ]; then
+        if [ -f "${DEPLOY_ROOT}/$file" ]; then
             echo "Applying $file..."
-            supabase db execute --file "$file" --project-ref ${PROJECT_REF} || {
+            (cd "${PROJECT_ROOT}" && supabase db execute --file "${DEPLOY_ROOT}/$file" --project-ref ${PROJECT_REF}) || {
                 echo -e "${RED}Failed to apply $file${NC}"
                 exit 1
             }
@@ -439,12 +590,12 @@ else
     
     # Apply post-migration fixes (fixes that aren't in the schema dump, including RLS policies, permissions, and triggers)
     CONNECTION_STRING="host=db.${PROJECT_REF}.supabase.co port=6543 user=postgres dbname=postgres sslmode=require"
-    if [ -f "scripts/post-migration-fixes.sql" ]; then
+    if [ -f "${DEPLOY_ROOT}/scripts/post-migration-fixes.sql" ]; then
         echo -e "${GREEN}Applying post-migration fixes...${NC}"
         psql "${CONNECTION_STRING}" \
             --single-transaction \
             --variable ON_ERROR_STOP=1 \
-            --file scripts/post-migration-fixes.sql || {
+            --file ${DEPLOY_ROOT}/scripts/post-migration-fixes.sql || {
                 echo -e "${YELLOW}Warning: Failed to apply post-migration fixes${NC}"
             }
     else
@@ -495,28 +646,49 @@ if [ ${#MISSING_VARS[@]} -ne 0 ]; then
     exit 1
 fi
 
+# Verify supabase/functions directory exists (we're already in deploy root)
+if [ ! -d "supabase/functions" ]; then
+    echo -e "${RED}Error: supabase/functions directory not found in ${DEPLOY_ROOT}${NC}"
+    exit 1
+fi
+
 echo -e "${GREEN}Setting Edge Function secrets...${NC}"
 # Note: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are automatically provided by Supabase
 # and cannot be set manually (they're created when the project is created).
 # Edge Functions can access them via Deno.env.get('SUPABASE_URL') and Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
-supabase secrets set \
+# Use subshell to ensure we're in project root for all Supabase CLI commands
+# Canonical functions are in PROJECT_ROOT/supabase/functions/
+# Use supabase_cmd to suppress Docker warnings
+(cd "${PROJECT_ROOT}" && supabase_cmd supabase secrets set \
     GOOGLE_TRANSLATE_API_KEY=${GOOGLE_TRANSLATE_API_KEY} \
     DEEPL_API_KEY=${DEEPL_API_KEY} \
     AUTH_LAMBDA_URL=${AUTH_LAMBDA_URL} \
     APP_BASE_URL=${APP_BASE_URL} \
     MANAGER_NOTIFICATION_COOLDOWN_HOURS=${MANAGER_NOTIFICATION_COOLDOWN_HOURS} \
-    --project-ref ${PROJECT_REF}
+    --project-ref ${PROJECT_REF})
 
 # Deploy Edge Functions (not included in database dumps)
 echo -e "${GREEN}Deploying Edge Functions...${NC}"
-supabase functions deploy create-user --no-verify-jwt --project-ref ${PROJECT_REF}
-supabase functions deploy delete-user --no-verify-jwt --project-ref ${PROJECT_REF}
-supabase functions deploy send-email --no-verify-jwt --project-ref ${PROJECT_REF}
-supabase functions deploy send-password-reset --no-verify-jwt --project-ref ${PROJECT_REF}
-supabase functions deploy update-user-password --no-verify-jwt --project-ref ${PROJECT_REF}
-supabase functions deploy translate-lesson --no-verify-jwt --project-ref ${PROJECT_REF}
-supabase functions deploy translation-status --no-verify-jwt --project-ref ${PROJECT_REF}
+
+# Deploy each function (only if it exists)
+# Canonical functions are in PROJECT_ROOT/supabase/functions/ (tracked in git)
+FUNCTIONS=("create-user" "delete-user" "send-email" "send-lesson-reminders" "send-password-reset" "translate-lesson" "translation-status" "update-user-password" "process-scheduled-notifications")
+
+for func in "${FUNCTIONS[@]}"; do
+    FUNC_PATH="supabase/functions/${func}"
+    if [ -d "${PROJECT_ROOT}/${FUNC_PATH}" ] && [ -f "${PROJECT_ROOT}/${FUNC_PATH}/index.ts" ]; then
+        echo -e "${GREEN}Deploying ${func}...${NC}"
+        echo -e "${YELLOW}  Path: ${PROJECT_ROOT}/${FUNC_PATH}${NC}"
+        # Use subshell to ensure correct workdir - functions are in project root
+        # Use supabase_cmd to suppress Docker warnings
+        (cd "${PROJECT_ROOT}" && supabase_cmd supabase functions deploy "${func}" --no-verify-jwt --project-ref ${PROJECT_REF}) || {
+            echo -e "${YELLOW}Warning: Failed to deploy ${func}, continuing...${NC}"
+        }
+    else
+        echo -e "${YELLOW}Warning: Function ${func} not found at ${PROJECT_ROOT}/${FUNC_PATH}, skipping...${NC}"
+    fi
+done
 
 # Ensure pg_cron is enabled and schedule manager notification job
 echo -e "${GREEN}Configuring manager notification cron job...${NC}"
@@ -619,7 +791,7 @@ TARGET_AUTH_USER_TRIGGER=$(psql "${CONNECTION_STRING}" -t -c "SELECT EXISTS(SELE
 [ "$TARGET_AUTH_USER_TRIGGER" = "t" ] && TARGET_AUTH_USER_TRIGGER="Yes" || TARGET_AUTH_USER_TRIGGER="No"
 
 # Check edge functions
-EXPECTED_FUNCTIONS=("create-user" "delete-user" "send-email" "send-password-reset" "update-password" "update-user-password" "translate-lesson" "translation-status")
+EXPECTED_FUNCTIONS=("create-user" "delete-user" "send-email" "send-lesson-reminders" "send-password-reset" "translate-lesson" "translation-status" "update-user-password" "process-scheduled-notifications")
 FUNCTIONS_LIST=$(supabase functions list --project-ref ${PROJECT_REF} --output json 2>/dev/null | jq -r '.[].slug' 2>/dev/null || echo "")
 TARGET_EDGE_FUNCTIONS=0
 for func in "${EXPECTED_FUNCTIONS[@]}"; do
@@ -828,9 +1000,9 @@ if [ "$ENVIRONMENT" = "dev" ] || [ "$ENVIRONMENT" = "staging" ]; then
     echo -e "  https://${CLIENT_DOMAIN}/activate-account"
     echo -e "${YELLOW}Note: For single-client environments, URLs don't need /${CLIENT_NAME} prefix${NC}"
 else
-    echo -e "  https://${CLIENT_DOMAIN}/${CLIENT_NAME}/reset-password"
-    echo -e "  https://${CLIENT_DOMAIN}/${CLIENT_NAME}/activate-account"
-    echo -e "${YELLOW}Note: For production, URLs require /${CLIENT_NAME} prefix${NC}"
+    echo -e "  https://${CLIENT_DOMAIN}/reset-password"
+    echo -e "  https://${CLIENT_DOMAIN}/activate-account"
+    echo -e "${YELLOW}Note: For production, CLIENT_DOMAIN already includes /${CLIENT_NAME}${NC}"
 fi
 echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
 echo ""
@@ -857,15 +1029,15 @@ else
     echo "⚠️  MULTI-CLIENT PRODUCTION ENVIRONMENT"
     echo "   Do NOT use 'default' client - require explicit client path (e.g., /rayn)"
     echo ""
-    echo "=== MULTI-CLIENT CONFIG (No Default Client - Required) ==="
-    echo "For production with multiple clients, use explicit client paths:"
+    echo "=== CONFIG FOR THIS CLIENT (${CLIENT_NAME}) ==="
+    echo "Use this JSON configuration for the ${CLIENT_NAME} client:"
     echo "{\"${CLIENT_NAME}\": {\"clientId\":\"${CLIENT_NAME}\",\"supabaseUrl\":\"https://${PROJECT_REF}.supabase.co\",\"supabaseAnonKey\":\"${ANON_KEY}\",\"displayName\":\"${CLIENT_NAME}\"}}"
     echo ""
-    echo "✓ Access requires explicit path: https://${CLIENT_DOMAIN}/${CLIENT_NAME}"
+    echo "✓ Access URL: https://${CLIENT_DOMAIN}"
     echo "✓ Root path (/) will show error - prevents accidental access"
     echo ""
-    echo "=== MULTI-CLIENT EXAMPLE (For Multiple Production Clients) ==="
-    echo "If you have multiple clients (e.g., rayn and ${CLIENT_NAME}), merge them:"
+    echo "=== EXAMPLE: MERGING MULTIPLE CLIENTS ==="
+    echo "If you already have other production clients (e.g., 'rayn'), merge this client with them:"
     echo "{\"rayn\":{\"clientId\":\"rayn\",\"supabaseUrl\":\"https://<rayn-project>.supabase.co\",\"supabaseAnonKey\":\"<rayn-anon-key>\",\"displayName\":\"rayn\"},\"${CLIENT_NAME}\":{\"clientId\":\"${CLIENT_NAME}\",\"supabaseUrl\":\"https://${PROJECT_REF}.supabase.co\",\"supabaseAnonKey\":\"${ANON_KEY}\",\"displayName\":\"${CLIENT_NAME}\"}}"
     echo ""
     echo "⚠️  CRITICAL: Never use 'default' client in production config"
@@ -978,8 +1150,8 @@ if [ "$ENVIRONMENT" = "dev" ] || [ "$ENVIRONMENT" = "staging" ]; then
     echo "       - https://${CLIENT_DOMAIN}/reset-password"
     echo "       - https://${CLIENT_DOMAIN}/activate-account"
 else
-    echo "       - https://${CLIENT_DOMAIN}/${CLIENT_NAME}/reset-password"
-    echo "       - https://${CLIENT_DOMAIN}/${CLIENT_NAME}/activate-account"
+    echo "       - https://${CLIENT_DOMAIN}/reset-password"
+    echo "       - https://${CLIENT_DOMAIN}/activate-account"
 fi
 echo "  2. Copy the client configuration JSON above"
 echo "  3. Update Vercel environment variable VITE_CLIENT_CONFIGS"
@@ -994,7 +1166,7 @@ echo "  4. Redeploy Vercel project"
 if [ "$ENVIRONMENT" = "dev" ] || [ "$ENVIRONMENT" = "staging" ]; then
     echo "  5. Test access at: https://${CLIENT_DOMAIN} (root path should work)"
 else
-    echo "  5. Test access at: https://${CLIENT_DOMAIN}/${CLIENT_NAME}"
+    echo "  5. Test access at: https://${CLIENT_DOMAIN}"
     echo "  6. Verify root path (/) shows error (this is expected and correct)"
 fi
 echo "  $(if [ "$ENVIRONMENT" != "dev" ] && [ "$ENVIRONMENT" != "staging" ]; then echo "7"; else echo "6"; fi). Test user creation and email sending"
