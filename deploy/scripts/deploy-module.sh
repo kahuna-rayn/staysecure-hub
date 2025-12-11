@@ -1,9 +1,9 @@
 #!/bin/bash
 # Comprehensive module deployment script
 # Handles: clean build, commit, push module → update consuming apps → commit, push apps
-# Usage: ./deploy-module.sh <module-name> <commit-message> [consuming-apps...]
-# Example: ./deploy-module.sh auth "Fix ResetPassword component" learn hub
-# Example: ./deploy-module.sh auth "Fix ResetPassword component"  (defaults to learn)
+# Usage: ./deploy/scripts/deploy-module.sh <module-name> <commit-message> [consuming-apps...]
+# Example: ./deploy/scripts/deploy-module.sh auth "Fix ResetPassword component" learn hub
+# Example: ./deploy/scripts/deploy-module.sh auth "Fix ResetPassword component"  (defaults to learn)
 
 set -e
 set -u
