@@ -94,8 +94,9 @@ for app in "${CONSUMING_APPS[@]}"; do
 done
 
 # Get workspace root
+# Script is in deploy/scripts/, so go up 2 levels to reach workspace root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORKSPACE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+WORKSPACE_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 MODULE_DIR="$WORKSPACE_ROOT/$MODULE_NAME"
 MODULE_PKG="staysecure-$MODULE_NAME"
