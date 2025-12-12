@@ -300,9 +300,18 @@ for app in "${CONSUMING_APPS[@]}"; do
             warning "Branch mismatch: expected $APP_BRANCH, got $CURRENT_APP_BRANCH"
         fi
         
+        # Backup package-lock.json if it exists (to preserve working structure for Vercel)
+        PACKAGE_LOCK_BACKUP=""
+        if [ -f "package-lock.json" ]; then
+            PACKAGE_LOCK_BACKUP=$(mktemp)
+            cp package-lock.json "$PACKAGE_LOCK_BACKUP"
+            info "Backed up package-lock.json to preserve working structure"
+        fi
+        
         # Nuclear cleanup for consuming app: remove all build artifacts and caches
         info "Nuclear cleanup: removing build artifacts and caches in $app..."
-        rm -rf node_modules dist package-lock.json .vite node_modules/.vite
+        rm -rf node_modules dist .vite node_modules/.vite
+        # Don't delete package-lock.json - we'll restore from backup if needed
         success "Cleaned build artifacts and caches in $app"
         
         # Clear npm cache to force fresh install from GitHub
@@ -320,9 +329,98 @@ for app in "${CONSUMING_APPS[@]}"; do
         info "Installing latest $MODULE_PKG from GitHub (forcing fresh install)..."
         if ! npm install "github:kahuna-rayn/$MODULE_PKG#main" --force --legacy-peer-deps; then
             error "Failed to install $MODULE_PKG in $app"
+            # Restore backup if install failed
+            if [ -n "$PACKAGE_LOCK_BACKUP" ] && [ -f "$PACKAGE_LOCK_BACKUP" ]; then
+                cp "$PACKAGE_LOCK_BACKUP" package-lock.json
+                info "Restored package-lock.json from backup"
+            fi
+            rm -f "$PACKAGE_LOCK_BACKUP"
             continue
         fi
-            success "Installed latest $MODULE_PKG"
+        success "Installed latest $MODULE_PKG"
+        
+        # For learn app: preserve package-lock.json structure to prevent Vercel rollup issues
+        # Restore backup and manually update only the module reference
+        if [ "$app" = "learn" ] && [ -n "$PACKAGE_LOCK_BACKUP" ] && [ -f "$PACKAGE_LOCK_BACKUP" ]; then
+            info "Preserving package-lock.json structure for learn (prevents Vercel rollup issues)..."
+            
+            # Get the installed module commit from the newly generated package-lock.json
+            if [ -f "package-lock.json" ]; then
+                NEW_MODULE_COMMIT=$(grep -A 5 "\"$MODULE_PKG\"" package-lock.json | grep "resolved" | sed -E 's/.*#([a-f0-9]+).*/\1/' | head -1 || echo "")
+            fi
+            
+            if [ -n "$NEW_MODULE_COMMIT" ]; then
+                info "Detected new module commit: $NEW_MODULE_COMMIT"
+                
+                # Restore the backup
+                cp "$PACKAGE_LOCK_BACKUP" package-lock.json
+                
+                # Update only the module reference in package-lock.json
+                PYTHON_UPDATE_SUCCESS=false
+                if command -v python3 > /dev/null 2>&1; then
+                    if python3 <<PYTHON_SCRIPT; then
+import json
+import sys
+
+try:
+    module_pkg = '$MODULE_PKG'
+    module_commit = '$NEW_MODULE_COMMIT'
+    
+    with open('package-lock.json', 'r') as f:
+        data = json.load(f)
+    
+    updated = False
+    
+    # Update in packages section
+    if 'packages' in data:
+        for key in data['packages']:
+            if key.endswith(f'/{module_pkg}') or key == f'node_modules/{module_pkg}':
+                if 'resolved' in data['packages'][key]:
+                    old_resolved = data['packages'][key]['resolved']
+                    if f'github.com/kahuna-rayn/{module_pkg}' in old_resolved:
+                        data['packages'][key]['resolved'] = f'git+ssh://git@github.com/kahuna-rayn/{module_pkg}#{module_commit}'
+                        updated = True
+    
+    # Update in dependencies section
+    if 'dependencies' in data and module_pkg in data['dependencies']:
+        if 'resolved' in data['dependencies'][module_pkg]:
+            data['dependencies'][module_pkg]['resolved'] = f'git+ssh://git@github.com/kahuna-rayn/{module_pkg}#{module_commit}'
+            updated = True
+    
+    if updated:
+        with open('package-lock.json', 'w') as f:
+            json.dump(data, f, indent=2)
+        print(f'Updated {module_pkg} reference to commit {module_commit}')
+    else:
+        print(f'Warning: Could not find {module_pkg} in package-lock.json to update')
+        sys.exit(1)
+except Exception as e:
+    print(f'Error updating package-lock.json: {e}')
+    sys.exit(1)
+PYTHON_SCRIPT
+                        PYTHON_UPDATE_SUCCESS=true
+                    fi
+                fi
+                
+                if [ "$PYTHON_UPDATE_SUCCESS" = false ]; then
+                    warning "Failed to update package-lock.json with Python, using sed fallback..."
+                    # Fallback: use sed to update (less precise but works)
+                    sed -i.bak "s|git+ssh://git@github.com/kahuna-rayn/$MODULE_PKG#[a-f0-9]*|git+ssh://git@github.com/kahuna-rayn/$MODULE_PKG#$NEW_MODULE_COMMIT|g" package-lock.json
+                    rm -f package-lock.json.bak
+                fi
+                
+                success "Updated package-lock.json with new module commit while preserving structure"
+            else
+                warning "Could not detect new module commit, keeping original package-lock.json"
+                cp "$PACKAGE_LOCK_BACKUP" package-lock.json
+            fi
+            
+            # Clean up backup
+            rm -f "$PACKAGE_LOCK_BACKUP"
+        elif [ -n "$PACKAGE_LOCK_BACKUP" ]; then
+            # Clean up backup if we didn't use it
+            rm -f "$PACKAGE_LOCK_BACKUP"
+        fi
         
         # Verify the installed module version matches what we just pushed
         info "Verifying installed module version matches pushed commit..."
