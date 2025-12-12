@@ -152,7 +152,7 @@ if [ "$DEPLOY_ALL_BRANCHES" = false ]; then
 
     # Install dependencies
     info "Installing dependencies..."
-    if ! npm install; then
+    if ! npm install --legacy-peer-deps; then
         error "npm install failed"
         exit 1
     fi
@@ -318,7 +318,7 @@ for app in "${CONSUMING_APPS[@]}"; do
         
         # Install latest module version with --force to override any conflicts
         info "Installing latest $MODULE_PKG from GitHub (forcing fresh install)..."
-        if ! npm install "github:kahuna-rayn/$MODULE_PKG#main" --force; then
+        if ! npm install "github:kahuna-rayn/$MODULE_PKG#main" --force --legacy-peer-deps; then
             error "Failed to install $MODULE_PKG in $app"
             continue
         fi
@@ -372,7 +372,7 @@ for app in "${CONSUMING_APPS[@]}"; do
             info "Waiting 3 seconds for GitHub to propagate changes..."
             sleep 3
             
-            if ! npm install "github:kahuna-rayn/$MODULE_PKG#main" --force; then
+            if ! npm install "github:kahuna-rayn/$MODULE_PKG#main" --force --legacy-peer-deps; then
                 error "Failed to force reinstall $MODULE_PKG"
                 continue
             fi
@@ -396,7 +396,7 @@ for app in "${CONSUMING_APPS[@]}"; do
                 error "This may be a GitHub propagation delay. Check:"
                 error "  1. GitHub shows commit $MODULE_COMMIT_SHORT on main branch"
                 error "  2. npm cache is cleared"
-                error "  3. Try manual install: npm install github:kahuna-rayn/$MODULE_PKG#main --force"
+                       error "  3. Try manual install: npm install github:kahuna-rayn/$MODULE_PKG#main --force --legacy-peer-deps"
                 continue
             fi
         fi
@@ -415,6 +415,48 @@ for app in "${CONSUMING_APPS[@]}"; do
         # Check if there are any changes to commit
         if git diff --staged --quiet; then
             info "No changes to commit in $app/$APP_BRANCH (module version may already be current)"
+            
+            # Check if there are unpushed commits that need to be pushed
+            if git rev-parse --abbrev-ref @{u} > /dev/null 2>&1; then
+                # Branch has upstream tracking
+                LOCAL_COMMIT=$(git rev-parse HEAD)
+                REMOTE_COMMIT=$(git rev-parse @{u} 2>/dev/null || echo "")
+                if [ -n "$REMOTE_COMMIT" ] && [ "$LOCAL_COMMIT" != "$REMOTE_COMMIT" ]; then
+                    # Check if we're ahead (have commits to push)
+                    if git rev-list --count @{u}..HEAD > /dev/null 2>&1; then
+                        AHEAD_COUNT=$(git rev-list --count @{u}..HEAD 2>/dev/null || echo "0")
+                        if [ "$AHEAD_COUNT" -gt 0 ]; then
+                            info "Found $AHEAD_COUNT unpushed commit(s) - pushing to origin/$APP_BRANCH..."
+                            if ! git push origin "$APP_BRANCH"; then
+                                error "Failed to push unpushed commits to $APP_BRANCH"
+                                continue
+                            fi
+                            success "Pushed $AHEAD_COUNT commit(s) to origin/$APP_BRANCH"
+                            APP_COMMIT=$(git rev-parse --short HEAD)
+                            info "Deployed $app/$APP_BRANCH at commit: $APP_COMMIT"
+                        fi
+                    fi
+                fi
+            else
+                # No upstream tracking - check if we're ahead of origin/BRANCH
+                if git show-ref --verify --quiet refs/remotes/origin/"$APP_BRANCH"; then
+                    LOCAL_COMMIT=$(git rev-parse HEAD)
+                    REMOTE_COMMIT=$(git rev-parse origin/"$APP_BRANCH" 2>/dev/null || echo "")
+                    if [ -n "$REMOTE_COMMIT" ] && [ "$LOCAL_COMMIT" != "$REMOTE_COMMIT" ]; then
+                        AHEAD_COUNT=$(git rev-list --count origin/"$APP_BRANCH"..HEAD 2>/dev/null || echo "0")
+                        if [ "$AHEAD_COUNT" -gt 0 ]; then
+                            info "Found $AHEAD_COUNT unpushed commit(s) - pushing to origin/$APP_BRANCH..."
+                            if ! git push origin "$APP_BRANCH"; then
+                                error "Failed to push unpushed commits to $APP_BRANCH"
+                                continue
+                            fi
+                            success "Pushed $AHEAD_COUNT commit(s) to origin/$APP_BRANCH"
+                            APP_COMMIT=$(git rev-parse --short HEAD)
+                            info "Deployed $app/$APP_BRANCH at commit: $APP_COMMIT"
+                        fi
+                    fi
+                fi
+            fi
         else
             # Changes exist - run tests if they exist
             if npm run test --if-present > /dev/null 2>&1; then
