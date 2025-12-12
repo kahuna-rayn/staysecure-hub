@@ -148,6 +148,8 @@ if [ "$DEPLOY_ALL_BRANCHES" = false ]; then
     # Nuclear cleanup: remove all build artifacts and caches
     info "Nuclear cleanup: removing build artifacts and caches..."
     rm -rf node_modules dist package-lock.json .vite node_modules/.vite
+    # Also clear npm cache to ensure fresh install
+    npm cache clean --force
     success "Cleaned build artifacts and caches"
 
     # Install dependencies
@@ -158,18 +160,32 @@ if [ "$DEPLOY_ALL_BRANCHES" = false ]; then
     fi
     success "Dependencies installed"
 
-    # Build module
+    # Build module (ensure clean build - remove dist again just before build to be safe)
     info "Building $MODULE_NAME..."
+    # Double-check dist is gone before building
+    if [ -d "dist" ]; then
+        warning "dist directory still exists, removing it..."
+        rm -rf dist
+    fi
     if ! npm run build; then
         error "Build failed"
         exit 1
     fi
     success "Build completed"
 
-    # Verify dist files exist
-    if [ ! -d "dist" ] || [ -z "$(ls -A dist)" ]; then
+    # Verify dist files exist and were actually rebuilt
+    if [ ! -d "dist" ] || [ -z "$(ls -A dist 2>/dev/null)" ]; then
         error "dist directory is empty or missing after build"
         exit 1
+    fi
+    # Check that dist files have recent timestamps (within last 10 seconds)
+    DIST_AGE=$(find dist -type f -name "*.js" | head -1 | xargs stat -f "%m" 2>/dev/null || find dist -type f -name "*.js" | head -1 | xargs stat -c "%Y" 2>/dev/null || echo "0")
+    CURRENT_TIME=$(date +%s)
+    if [ -n "$DIST_AGE" ] && [ "$DIST_AGE" != "0" ]; then
+        AGE_DIFF=$((CURRENT_TIME - DIST_AGE))
+        if [ "$AGE_DIFF" -gt 60 ]; then
+            warning "Dist files appear to be older than 60 seconds - build may have used cache"
+        fi
     fi
     success "Dist files verified"
 
@@ -180,16 +196,85 @@ if [ "$DEPLOY_ALL_BRANCHES" = false ]; then
     # Stage all changes (including new files, modifications, deletions)
     info "Staging all changes..."
     git add -A
+    
+    # Explicitly ensure dist files are staged
+    if [ -d "dist" ] && [ -n "$(ls -A dist 2>/dev/null)" ]; then
+        info "Explicitly staging dist files..."
+        git add dist/
+    fi
 
     # Check if there are changes to commit
     if git diff --staged --quiet; then
-        warning "No changes to commit in $MODULE_NAME after build"
-        info "This may be normal if only build artifacts changed and they're not tracked"
-        read -p "Continue to consuming apps anyway? (y/N) " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            info "Aborted by user"
-            exit 0
+        info "No changes to commit after build (dist files may already be committed)"
+        
+        # Check if there are any uncommitted source file changes
+        if ! git diff --quiet HEAD -- 'src/'; then
+            warning "Uncommitted source file changes detected:"
+            git diff --stat HEAD -- 'src/'
+            error "Please commit source file changes before deploying"
+            exit 1
+        fi
+        
+        # Check if dist files exist and are tracked
+        if [ -d "dist" ] && [ -n "$(ls -A dist 2>/dev/null)" ]; then
+            info "Dist files exist and appear to be already committed"
+            # Verify dist files are in the last commit
+            if git ls-files --error-unmatch dist/ >/dev/null 2>&1; then
+                info "Dist files are tracked in git - checking if they're up to date..."
+                # Check if dist files match what's in HEAD
+                if git diff --quiet HEAD -- dist/; then
+                    success "Dist files are already committed and up to date"
+                    info "Skipping commit (already up to date), proceeding to push check..."
+                else
+                    warning "Dist files differ from HEAD - this shouldn't happen"
+                    info "Dist file status:"
+                    git status --short dist/
+                fi
+            else
+                warning "Dist files exist but aren't tracked - they should be committed"
+            fi
+        fi
+        
+        # Check if we're ahead of origin (already pushed)
+        LOCAL_COMMIT=$(git rev-parse HEAD)
+        REMOTE_COMMIT=$(git rev-parse origin/$CURRENT_BRANCH 2>/dev/null || echo "")
+        
+        if [ -n "$REMOTE_COMMIT" ] && [ "$LOCAL_COMMIT" = "$REMOTE_COMMIT" ]; then
+            success "Already up to date with origin/$CURRENT_BRANCH - skipping commit and push"
+        elif [ -n "$REMOTE_COMMIT" ]; then
+            info "Checking if we're ahead of origin..."
+            if git merge-base --is-ancestor "$REMOTE_COMMIT" "$LOCAL_COMMIT" 2>/dev/null; then
+                success "Already ahead of origin - will push existing commits"
+            else
+                warning "Local and remote have diverged - may need to pull first"
+            fi
+        else
+            info "No remote tracking branch found"
+        fi
+        
+        # Skip commit but continue to push check
+        MODULE_COMMIT=$(git rev-parse HEAD)
+        MODULE_COMMIT_SHORT=$(git rev-parse --short HEAD)
+        info "Using existing commit: $MODULE_COMMIT_SHORT (full: $MODULE_COMMIT)"
+        
+        # Check if we need to push (if we're ahead of origin)
+        LOCAL_COMMIT=$(git rev-parse HEAD)
+        REMOTE_COMMIT=$(git rev-parse origin/$CURRENT_BRANCH 2>/dev/null || echo "")
+        
+        if [ -n "$REMOTE_COMMIT" ] && [ "$LOCAL_COMMIT" = "$REMOTE_COMMIT" ]; then
+            success "Already up to date with origin/$CURRENT_BRANCH - skipping push"
+        elif [ -n "$REMOTE_COMMIT" ] && git merge-base --is-ancestor "$REMOTE_COMMIT" "$LOCAL_COMMIT" 2>/dev/null; then
+            # We're ahead of origin - push existing commits
+            info "Pushing existing commits to origin/$CURRENT_BRANCH..."
+            if ! git push origin "$CURRENT_BRANCH"; then
+                error "Failed to push"
+                exit 1
+            fi
+            success "Pushed to origin/$CURRENT_BRANCH"
+        elif [ -z "$REMOTE_COMMIT" ]; then
+            info "No remote tracking branch - skipping push"
+        else
+            warning "Local and remote may have diverged - skipping push"
         fi
     else
         info "Changes to commit:"
@@ -202,19 +287,34 @@ if [ "$DEPLOY_ALL_BRANCHES" = false ]; then
         fi
         success "Changes committed"
 
-        # Push to remote
-        info "Pushing to origin/$CURRENT_BRANCH..."
-        if ! git push origin "$CURRENT_BRANCH"; then
-            error "Failed to push"
-            exit 1
+        # Update module commit hash before push
+        MODULE_COMMIT=$(git rev-parse HEAD)
+        MODULE_COMMIT_SHORT=$(git rev-parse --short HEAD)
+        
+        # Check if we need to push (if we're ahead of origin)
+        LOCAL_COMMIT=$(git rev-parse HEAD)
+        REMOTE_COMMIT=$(git rev-parse origin/$CURRENT_BRANCH 2>/dev/null || echo "")
+        
+        if [ -n "$REMOTE_COMMIT" ] && [ "$LOCAL_COMMIT" = "$REMOTE_COMMIT" ]; then
+            success "Already up to date with origin/$CURRENT_BRANCH - skipping push"
+        else
+            # Push to remote
+            info "Pushing to origin/$CURRENT_BRANCH..."
+            if ! git push origin "$CURRENT_BRANCH"; then
+                error "Failed to push"
+                exit 1
+            fi
+            success "Pushed to origin/$CURRENT_BRANCH"
         fi
-        success "Pushed to origin/$CURRENT_BRANCH"
+        
+        info "Module commit after push: $MODULE_COMMIT_SHORT (full: $MODULE_COMMIT)"
     fi
 
-    # Update module commit hash after push
-    MODULE_COMMIT=$(git rev-parse HEAD)
-    MODULE_COMMIT_SHORT=$(git rev-parse --short HEAD)
-    info "Module commit after push: $MODULE_COMMIT_SHORT (full: $MODULE_COMMIT)"
+    # Ensure MODULE_COMMIT is set (in case we skipped commit)
+    if [ -z "$MODULE_COMMIT" ]; then
+        MODULE_COMMIT=$(git rev-parse HEAD)
+        MODULE_COMMIT_SHORT=$(git rev-parse --short HEAD)
+    fi
 else
     info "Skipping module build/push (using existing commit: $MODULE_COMMIT_SHORT)"
 fi
@@ -300,19 +400,11 @@ for app in "${CONSUMING_APPS[@]}"; do
             warning "Branch mismatch: expected $APP_BRANCH, got $CURRENT_APP_BRANCH"
         fi
         
-        # Backup package-lock.json if it exists (to preserve working structure for Vercel)
-        PACKAGE_LOCK_BACKUP=""
-        if [ -f "package-lock.json" ]; then
-            PACKAGE_LOCK_BACKUP=$(mktemp)
-            cp package-lock.json "$PACKAGE_LOCK_BACKUP"
-            info "Backed up package-lock.json to preserve working structure"
-        fi
-        
-        # Nuclear cleanup for consuming app: remove all build artifacts and caches
-        info "Nuclear cleanup: removing build artifacts and caches in $app..."
-        rm -rf node_modules dist .vite node_modules/.vite
-        # Don't delete package-lock.json - we'll restore from backup if needed
-        success "Cleaned build artifacts and caches in $app"
+        # Nuclear cleanup for consuming app: remove all build artifacts, caches, and package-lock.json
+        # Regenerating package-lock.json ensures we get the correct module version
+        info "Nuclear cleanup: removing build artifacts, caches, and package-lock.json in $app..."
+        rm -rf node_modules dist .vite node_modules/.vite package-lock.json
+        success "Cleaned build artifacts, caches, and package-lock.json in $app"
         
         # Clear npm cache to force fresh install from GitHub
         info "Clearing npm cache to force fresh module install..."
@@ -325,102 +417,13 @@ for app in "${CONSUMING_APPS[@]}"; do
             rm -rf "node_modules/$MODULE_PKG"
         fi
         
-        # Install latest module version with --force to override any conflicts
-        info "Installing latest $MODULE_PKG from GitHub (forcing fresh install)..."
-        if ! npm install "github:kahuna-rayn/$MODULE_PKG#main" --force --legacy-peer-deps; then
+        # Install dependencies (will regenerate package-lock.json with latest module version)
+        info "Installing dependencies (will regenerate package-lock.json with latest $MODULE_PKG)..."
+        if ! npm install "$MODULE_PKG@github:kahuna-rayn/$MODULE_PKG#main" --legacy-peer-deps --save; then
             error "Failed to install $MODULE_PKG in $app"
-            # Restore backup if install failed
-            if [ -n "$PACKAGE_LOCK_BACKUP" ] && [ -f "$PACKAGE_LOCK_BACKUP" ]; then
-                cp "$PACKAGE_LOCK_BACKUP" package-lock.json
-                info "Restored package-lock.json from backup"
-            fi
-            rm -f "$PACKAGE_LOCK_BACKUP"
             continue
         fi
-        success "Installed latest $MODULE_PKG"
-        
-        # For learn app: preserve package-lock.json structure to prevent Vercel rollup issues
-        # Restore backup and manually update only the module reference
-        if [ "$app" = "learn" ] && [ -n "$PACKAGE_LOCK_BACKUP" ] && [ -f "$PACKAGE_LOCK_BACKUP" ]; then
-            info "Preserving package-lock.json structure for learn (prevents Vercel rollup issues)..."
-            
-            # Get the installed module commit from the newly generated package-lock.json
-            if [ -f "package-lock.json" ]; then
-                NEW_MODULE_COMMIT=$(grep -A 5 "\"$MODULE_PKG\"" package-lock.json | grep "resolved" | sed -E 's/.*#([a-f0-9]+).*/\1/' | head -1 || echo "")
-            fi
-            
-            if [ -n "$NEW_MODULE_COMMIT" ]; then
-                info "Detected new module commit: $NEW_MODULE_COMMIT"
-                
-                # Restore the backup
-                cp "$PACKAGE_LOCK_BACKUP" package-lock.json
-                
-                # Update only the module reference in package-lock.json
-                PYTHON_UPDATE_SUCCESS=false
-                if command -v python3 > /dev/null 2>&1; then
-                    if python3 <<PYTHON_SCRIPT; then
-import json
-import sys
-
-try:
-    module_pkg = '$MODULE_PKG'
-    module_commit = '$NEW_MODULE_COMMIT'
-    
-    with open('package-lock.json', 'r') as f:
-        data = json.load(f)
-    
-    updated = False
-    
-    # Update in packages section
-    if 'packages' in data:
-        for key in data['packages']:
-            if key.endswith(f'/{module_pkg}') or key == f'node_modules/{module_pkg}':
-                if 'resolved' in data['packages'][key]:
-                    old_resolved = data['packages'][key]['resolved']
-                    if f'github.com/kahuna-rayn/{module_pkg}' in old_resolved:
-                        data['packages'][key]['resolved'] = f'git+ssh://git@github.com/kahuna-rayn/{module_pkg}#{module_commit}'
-                        updated = True
-    
-    # Update in dependencies section
-    if 'dependencies' in data and module_pkg in data['dependencies']:
-        if 'resolved' in data['dependencies'][module_pkg]:
-            data['dependencies'][module_pkg]['resolved'] = f'git+ssh://git@github.com/kahuna-rayn/{module_pkg}#{module_commit}'
-            updated = True
-    
-    if updated:
-        with open('package-lock.json', 'w') as f:
-            json.dump(data, f, indent=2)
-        print(f'Updated {module_pkg} reference to commit {module_commit}')
-    else:
-        print(f'Warning: Could not find {module_pkg} in package-lock.json to update')
-        sys.exit(1)
-except Exception as e:
-    print(f'Error updating package-lock.json: {e}')
-    sys.exit(1)
-PYTHON_SCRIPT
-                        PYTHON_UPDATE_SUCCESS=true
-                    fi
-                fi
-                
-                if [ "$PYTHON_UPDATE_SUCCESS" = false ]; then
-                    warning "Failed to update package-lock.json with Python, using sed fallback..."
-                    # Fallback: use sed to update (less precise but works)
-                    sed -i.bak "s|git+ssh://git@github.com/kahuna-rayn/$MODULE_PKG#[a-f0-9]*|git+ssh://git@github.com/kahuna-rayn/$MODULE_PKG#$NEW_MODULE_COMMIT|g" package-lock.json
-                    rm -f package-lock.json.bak
-                fi
-                
-                success "Updated package-lock.json with new module commit while preserving structure"
-            else
-                warning "Could not detect new module commit, keeping original package-lock.json"
-                cp "$PACKAGE_LOCK_BACKUP" package-lock.json
-            fi
-            
-            # Clean up backup
-            rm -f "$PACKAGE_LOCK_BACKUP"
-        elif [ -n "$PACKAGE_LOCK_BACKUP" ]; then
-            # Clean up backup if we didn't use it
-            rm -f "$PACKAGE_LOCK_BACKUP"
-        fi
+        success "Installed latest $MODULE_PKG and regenerated package-lock.json"
         
         # Verify the installed module version matches what we just pushed
         info "Verifying installed module version matches pushed commit..."
