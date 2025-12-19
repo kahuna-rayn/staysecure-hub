@@ -198,9 +198,14 @@ if [ "$DEPLOY_ALL_BRANCHES" = false ]; then
     git add -A
     
     # Explicitly ensure dist files are staged
+    # Use -f (force) to override .gitignore if needed (dist should be committed for GitHub-based npm packages)
     if [ -d "dist" ] && [ -n "$(ls -A dist 2>/dev/null)" ]; then
         info "Explicitly staging dist files..."
-        git add dist/
+        if ! git add dist/ 2>/dev/null; then
+            # If regular add fails (due to .gitignore), try force add
+            info "Regular add failed, trying force add for dist files..."
+            git add -f dist/
+        fi
     fi
 
     # Check if there are changes to commit
